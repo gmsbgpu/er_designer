@@ -6,7 +6,7 @@ import uuid
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QSplitter, QFileDialog, QMessageBox, QToolBar,
-    QPushButton
+    QPushButton, QApplication
 )
 from PyQt6.QtCore import Qt, QPointF
 from PyQt6.QtGui import QAction
@@ -34,6 +34,10 @@ class MainWindow(QMainWindow):
         self._create_menu_bar()
         self._create_toolbar()
         self._connect_signals()
+
+        self.canvas.set_project(self.project)
+
+        self._update_sql_display()
 
     def _setup_ui(self):
         """Настройка интерфейса."""
@@ -66,6 +70,8 @@ class MainWindow(QMainWindow):
 
         main_layout.addLayout(vertical_layout)
 
+        self.canvas.set_project(self.project)
+
     def _create_toolbar(self):
         """Создание панели инструментов с кнопками."""
         toolbar = QToolBar("Инструменты")
@@ -97,6 +103,12 @@ class MainWindow(QMainWindow):
         self.btn_generate_sql.setToolTip("Обновить SQL-код по текущей диаграмме")
         self.btn_generate_sql.clicked.connect(self._update_sql_display)
         toolbar.addWidget(self.btn_generate_sql)
+
+        # Кнопка копирования SQL (дублер для удобства)
+        self.btn_copy_sql = QPushButton("📋 Копировать SQL")
+        self.btn_copy_sql.setToolTip("Скопировать SQL-код в буфер обмена")
+        self.btn_copy_sql.clicked.connect(self._on_copy_sql)
+        toolbar.addWidget(self.btn_copy_sql)
 
     def _create_menu_bar(self):
         """Создание строки меню."""
@@ -135,6 +147,14 @@ class MainWindow(QMainWindow):
         self.exit_action.triggered.connect(self.close)
         file_menu.addAction(self.exit_action)
 
+        # Меню Правка
+        edit_menu = menubar.addMenu("Правка")
+
+        self.delete_action = QAction("Удалить", self)
+        self.delete_action.setShortcut("Delete")
+        self.delete_action.triggered.connect(self._on_delete_clicked)
+        edit_menu.addAction(self.delete_action)
+
         # Меню Справка
         help_menu = menubar.addMenu("Справка")
 
@@ -146,9 +166,11 @@ class MainWindow(QMainWindow):
         """Подключение сигналов."""
         # При выборе сущности на холсте обновляем панель свойств
         self.canvas.entity_selected.connect(self.property_panel.set_entity)
+        # При снятии выбора очищаем панель
+        self.canvas.selection_cleared.connect(self.property_panel.clear)
         # При изменении данных в панели свойств обновляем холст и SQL
         self.property_panel.entity_updated.connect(self._on_entity_updated)
-        # При изменении проекта на холсте (добавление/удаление)
+        # При изменении проекта (добавление/удаление сущностей/связей)
         self.canvas.project_changed.connect(self._on_project_changed)
 
     def _on_entity_updated(self, entity_id):
@@ -157,7 +179,7 @@ class MainWindow(QMainWindow):
         self._update_sql_display()
 
     def _on_project_changed(self):
-        """Обработка изменения проекта (добавление/удаление сущностей)."""
+        """Обработка изменения проекта."""
         self._update_sql_display()
 
     def _update_sql_display(self):
@@ -165,13 +187,27 @@ class MainWindow(QMainWindow):
         sql = SqlGenerator.generate_ddl(self.project)
         self.sql_panel.set_sql(sql)
 
+    def _on_copy_sql(self):
+        """Копировать SQL в буфер обмена."""
+        sql = self.sql_panel.get_sql()
+        if sql:
+            QApplication.clipboard().setText(sql)
+            QMessageBox.information(self, "Успешно", "SQL-код скопирован в буфер обмена.")
+
     def _on_add_entity_clicked(self):
         """Обработка нажатия кнопки добавления сущности."""
         self.canvas.set_mode("ADD_ENTITY")
+        # Сбрасываем выделение на панели свойств
+        self.property_panel.clear()
 
     def _on_add_relationship_clicked(self):
         """Обработка нажатия кнопки добавления связи."""
+        if len(self.project.entities) < 2:
+            QMessageBox.warning(self, "Недостаточно сущностей",
+                                "Для создания связи необходимо хотя бы две сущности.")
+            return
         self.canvas.set_mode("ADD_RELATIONSHIP")
+        self.property_panel.clear()
 
     def _on_delete_clicked(self):
         """Обработка нажатия кнопки удаления."""
@@ -186,6 +222,10 @@ class MainWindow(QMainWindow):
 
     def on_new_project(self):
         """Создать новый проект."""
+        # Спрашиваем подтверждение, если есть несохранённые изменения
+        if self.project.entities and not self._confirm_save():
+            return
+
         self.project = Project()
         self.current_file_path = None
         self.canvas.set_project(self.project)
@@ -195,6 +235,9 @@ class MainWindow(QMainWindow):
 
     def on_open_project(self):
         """Открыть существующий проект."""
+        if self.project.entities and not self._confirm_save():
+            return
+
         file_path, _ = QFileDialog.getOpenFileName(
             self, "Открыть проект", "",
             "ER-Designer Project (*.erd);;JSON Files (*.json);;All Files (*)"
@@ -239,6 +282,10 @@ class MainWindow(QMainWindow):
     def on_export_sql(self):
         """Экспорт SQL-скрипта в файл."""
         sql = SqlGenerator.generate_ddl(self.project)
+        if not sql.strip():
+            QMessageBox.warning(self, "Нет данных", "Нет сущностей для экспорта.")
+            return
+
         file_path, _ = QFileDialog.getSaveFileName(
             self, "Экспорт SQL", self.project.name,
             "SQL Files (*.sql);;All Files (*)"
@@ -251,8 +298,33 @@ class MainWindow(QMainWindow):
             except Exception as e:
                 QMessageBox.critical(self, "Ошибка", f"Не удалось сохранить SQL:\n{e}")
 
+    def _confirm_save(self):
+        """Спросить пользователя о сохранении изменений."""
+        reply = QMessageBox.question(
+            self, "Сохранение изменений",
+            "Сохранить изменения перед закрытием?",
+            QMessageBox.StandardButton.Yes |
+            QMessageBox.StandardButton.No |
+            QMessageBox.StandardButton.Cancel
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            self.on_save_project()
+            return True
+        elif reply == QMessageBox.StandardButton.No:
+            return True
+        else:
+            return False
+
     def on_about(self):
         """Показать диалог 'О программе'."""
         from gui.dialogs import AboutDialog
         dialog = AboutDialog(self)
         dialog.exec()
+
+    def closeEvent(self, event):
+        """Обработка закрытия окна."""
+        if self.project.entities:
+            if not self._confirm_save():
+                event.ignore()
+                return
+        event.accept()

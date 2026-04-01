@@ -6,6 +6,7 @@ from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QFormLayout, QLineEdit,
     QComboBox, QCheckBox, QDialogButtonBox, QLabel
 )
+from PyQt6.QtCore import Qt
 from models import DataType
 
 
@@ -84,7 +85,7 @@ class AboutDialog(QDialog):
 
         title = QLabel("ER-Designer v1.0")
         title.setStyleSheet("font-size: 18pt; font-weight: bold;")
-        title.setAlignment(0x84)  # Qt.AlignmentFlag.AlignHCenter
+        title.setAlignment(Qt.AlignmentFlag.AlignHCenter)
         layout.addWidget(title)
 
         desc = QLabel(
@@ -92,7 +93,7 @@ class AboutDialog(QDialog):
             "с генерацией SQL-скриптов"
         )
         desc.setWordWrap(True)
-        desc.setAlignment(0x84)
+        desc.setAlignment(Qt.AlignmentFlag.AlignHCenter)
         layout.addWidget(desc)
 
         layout.addSpacing(10)

@@ -7,7 +7,7 @@ import uuid
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QFormLayout, QLineEdit,
     QTableWidget, QTableWidgetItem, QPushButton, QHBoxLayout,
-    QHeaderView, QMessageBox
+    QHeaderView, QMessageBox, QDialog  # <-- ДОБАВЛЯЕМ QDialog
 )
 from PyQt6.QtCore import pyqtSignal
 
@@ -29,9 +29,6 @@ class PropertyPanelWidget(QWidget):
         """Настройка интерфейса панели."""
         layout = QVBoxLayout(self)
         layout.setContentsMargins(10, 10, 10, 10)
-
-        # Заголовок
-        self.title_label = QWidget()  # placeholder, можно добавить label
 
         # Форма для имени сущности
         form_layout = QFormLayout()
@@ -74,7 +71,9 @@ class PropertyPanelWidget(QWidget):
     def clear(self):
         """Очистить панель."""
         self.current_entity = None
+        self.name_edit.blockSignals(True)
         self.name_edit.clear()
+        self.name_edit.blockSignals(False)
         self.attributes_table.setRowCount(0)
 
     def _update_ui(self):
@@ -120,7 +119,8 @@ class PropertyPanelWidget(QWidget):
             return
 
         dialog = AttributeDialog(self)
-        if dialog.exec_():
+        # Используем exec() вместо exec_() в PyQt6
+        if dialog.exec() == QDialog.DialogCode.Accepted:
             data = dialog.get_attribute_data()
             new_attr = Attribute(
                 name=data["name"],
@@ -154,7 +154,7 @@ class PropertyPanelWidget(QWidget):
             "is_unique": attr.is_unique,
         })
 
-        if dialog.exec_():
+        if dialog.exec() == QDialog.DialogCode.Accepted:
             data = dialog.get_attribute_data()
             attr.name = data["name"]
             attr.data_type = data["data_type"]

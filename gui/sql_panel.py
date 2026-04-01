@@ -38,13 +38,16 @@ class SqlPanelWidget(QWidget):
         """Установить SQL-код для отображения."""
         self.sql_text.setPlainText(sql)
 
+    def get_sql(self) -> str:
+        """Получить текущий SQL-код."""
+        return self.sql_text.toPlainText()
+
     def clear(self):
         """Очистить панель."""
         self.sql_text.clear()
 
     def _on_copy(self):
         """Скопировать SQL в буфер обмена."""
-        sql = self.sql_text.toPlainText()
+        sql = self.get_sql()
         if sql:
-            clipboard = QApplication.clipboard()
-            clipboard.setText(sql)
+            QApplication.clipboard().setText(sql)
