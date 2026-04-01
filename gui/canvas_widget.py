@@ -7,7 +7,7 @@ from typing import Dict, Optional
 
 from PyQt6.QtWidgets import (
     QGraphicsView, QGraphicsScene, QGraphicsRectItem,
-    QGraphicsTextItem, QGraphicsLineItem
+    QGraphicsTextItem, QGraphicsLineItem, QGraphicsItem
 )
 from PyQt6.QtCore import pyqtSignal, Qt, QRectF, QPointF
 from PyQt6.QtGui import QPen, QBrush, QColor, QFont
@@ -36,7 +36,7 @@ class EntityItem(QGraphicsRectItem):
 
     def _update_preview(self):
         """Обновить предпросмотр атрибутов."""
-        # Удаляем старые текстовые элементы
+        # Удаляем старые текстовые элементы (кроме name_item)
         for child in self.childItems():
             if child != self.name_item:
                 self.scene().removeItem(child)
@@ -75,6 +75,11 @@ class EntityItem(QGraphicsRectItem):
             self.entity.position = value
         return super().itemChange(change, value)
 
+    def mouseDoubleClickEvent(self, event):
+        """Двойной клик — выбор сущности."""
+        self.scene().views()[0].entity_selected.emit(self.entity)
+        super().mouseDoubleClickEvent(event)
+
 
 class RelationshipItem(QGraphicsLineItem):
     """Графическое представление связи."""
@@ -85,6 +90,7 @@ class RelationshipItem(QGraphicsLineItem):
         self.source_item = source_item
         self.target_item = target_item
         self.setPen(QPen(QColor(100, 100, 100), 2))
+        self.setFlag(QGraphicsLineItem.GraphicsItemFlag.ItemIsSelectable, True)
         self.update_position()
 
     def update_position(self):
@@ -98,6 +104,7 @@ class CanvasWidget(QGraphicsView):
     """Виджет холста для отображения и редактирования ER-диаграммы."""
 
     entity_selected = pyqtSignal(object)  # передаём Entity
+    project_changed = pyqtSignal()  # сигнал об изменении проекта
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -115,6 +122,19 @@ class CanvasWidget(QGraphicsView):
         self.current_mode = "SELECT"  # SELECT, ADD_ENTITY, ADD_RELATIONSHIP
         self.temp_line = None
         self.source_entity_for_relation = None
+
+    def set_mode(self, mode: str):
+        """Установить режим работы холста."""
+        self.current_mode = mode
+        if mode == "ADD_ENTITY":
+            self.setDragMode(QGraphicsView.DragMode.NoDrag)
+            self.viewport().setCursor(Qt.CursorShape.CrossCursor)
+        elif mode == "ADD_RELATIONSHIP":
+            self.setDragMode(QGraphicsView.DragMode.NoDrag)
+            self.viewport().setCursor(Qt.CursorShape.CrossCursor)
+        else:
+            self.setDragMode(QGraphicsView.DragMode.RubberBandDrag)
+            self.viewport().setCursor(Qt.CursorShape.ArrowCursor)
 
     def set_project(self, project: Project):
         """Установить проект для отображения."""
@@ -150,30 +170,59 @@ class CanvasWidget(QGraphicsView):
         """Добавить графический элемент сущности."""
         item = EntityItem(entity)
         item.setPos(entity.position)
-        item.setSelected(False)
-
-        # Подключаем сигналы
-        item.mouseDoubleClickEvent = lambda event: self._on_entity_double_clicked(item, event)
-
         self.scene.addItem(item)
         self.entity_items[entity.id] = item
         return item
 
-    def _on_entity_double_clicked(self, item: EntityItem, event):
-        """Обработка двойного клика по сущности."""
-        self.entity_selected.emit(item.entity)
+    def update_entity(self, entity_id: uuid.UUID):
+        """Обновить отображение сущности."""
+        item = self.entity_items.get(entity_id)
+        if item:
+            item.update_from_entity()
+            # Обновляем связи
+            for rel_item in self.relationship_items.values():
+                rel_item.update_position()
+
+    def delete_selected(self):
+        """Удалить выбранные элементы."""
+        if not self.project:
+            return
+
+        selected_items = self.scene.selectedItems()
+        for item in selected_items:
+            if isinstance(item, EntityItem):
+                self.project.remove_entity(item.entity_id)
+                self.scene.removeItem(item)
+                del self.entity_items[item.entity_id]
+            elif isinstance(item, RelationshipItem):
+                self.project.remove_relationship(item.relationship_id)
+                self.scene.removeItem(item)
+                del self.relationship_items[item.relationship_id]
+
+        # Удаляем связи, которые ссылались на удалённые сущности
+        for rel_id, rel_item in list(self.relationship_items.items()):
+            if rel_item not in self.scene.items():
+                continue
+            source_exists = rel_item.source_item in self.entity_items.values()
+            target_exists = rel_item.target_item in self.entity_items.values()
+            if not (source_exists and target_exists):
+                self.scene.removeItem(rel_item)
+                del self.relationship_items[rel_id]
+                self.project.remove_relationship(rel_id)
+
+        self.project_changed.emit()
 
     def mousePressEvent(self, event):
         """Обработка нажатия мыши для режимов."""
         if self.current_mode == "ADD_ENTITY":
             pos = self.mapToScene(event.position().toPoint())
-            entity = Entity(name="NewEntity", position=pos)
+            entity = Entity(name="Новая сущность", position=pos)
             self.project.add_entity(entity)
             self._add_entity_item(entity)
             self.entity_selected.emit(entity)
-            self.current_mode = "SELECT"
+            self.set_mode("SELECT")
+            self.project_changed.emit()
         elif self.current_mode == "ADD_RELATIONSHIP":
-            # Начинаем рисование связи
             pos = self.mapToScene(event.position().toPoint())
             item = self.itemAt(event.position().toPoint())
             if isinstance(item, EntityItem):
@@ -199,7 +248,8 @@ class CanvasWidget(QGraphicsView):
         if self.current_mode == "ADD_RELATIONSHIP" and self.temp_line:
             pos = self.mapToScene(event.position().toPoint())
             target_item = self.itemAt(event.position().toPoint())
-            if isinstance(target_item, EntityItem) and target_item != self.source_entity_for_relation:
+            if (isinstance(target_item, EntityItem) and
+                target_item != self.source_entity_for_relation):
                 # Создаём связь
                 rel = Relationship(
                     source_entity_id=self.source_entity_for_relation.entity_id,
@@ -209,17 +259,12 @@ class CanvasWidget(QGraphicsView):
                 rel_item = RelationshipItem(rel, self.source_entity_for_relation, target_item)
                 self.scene.addItem(rel_item)
                 self.relationship_items[rel.id] = rel_item
+                self.project_changed.emit()
 
             # Удаляем временную линию
             self.scene.removeItem(self.temp_line)
             self.temp_line = None
             self.source_entity_for_relation = None
-            self.current_mode = "SELECT"
+            self.set_mode("SELECT")
         else:
             super().mouseReleaseEvent(event)
-
-    def update_entity(self, entity_id: uuid.UUID):
-        """Обновить отображение сущности."""
-        item = self.entity_items.get(entity_id)
-        if item:
-            item.update_from_entity()
