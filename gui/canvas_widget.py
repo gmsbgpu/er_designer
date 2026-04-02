@@ -112,6 +112,7 @@ class CanvasWidget(QGraphicsView):
     entity_selected = pyqtSignal(object)
     selection_cleared = pyqtSignal()
     project_changed = pyqtSignal()
+    mode_changed = pyqtSignal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -140,6 +141,7 @@ class CanvasWidget(QGraphicsView):
     def set_mode(self, mode: str):
         """Установить режим работы холста."""
         self.current_mode = mode
+        self.mode_changed.emit(mode)
         if mode == "ADD_ENTITY":
             self.setDragMode(QGraphicsView.DragMode.NoDrag)
             self.viewport().setCursor(Qt.CursorShape.CrossCursor)
@@ -185,6 +187,27 @@ class CanvasWidget(QGraphicsView):
         self.scene.addItem(item)
         self.entity_items[entity.id] = item
         return item
+
+    def cancel_current_mode(self):
+        """Отменить текущий режим и вернуться в режим выбора."""
+        if self.current_mode != "SELECT":
+            # Если есть временная линия связи — удаляем
+            if self.temp_line:
+                self.scene.removeItem(self.temp_line)
+                self.temp_line = None
+            self.source_entity_for_relation = None
+            self.set_mode("SELECT")
+            # Очищаем выделение на панели свойств
+            self.selection_cleared.emit()
+
+    def keyPressEvent(self, event):
+        """Обработка нажатия клавиш."""
+        if event.key() == Qt.Key.Key_Escape:
+            self.cancel_current_mode()
+        elif event.key() == Qt.Key.Key_Delete:
+            self.delete_selected()
+        else:
+            super().keyPressEvent(event)
 
     def update_entity(self, entity_id: uuid.UUID):
         """Обновить отображение сущности."""

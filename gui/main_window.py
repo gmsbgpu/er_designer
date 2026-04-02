@@ -96,6 +96,12 @@ class MainWindow(QMainWindow):
         self.btn_delete.clicked.connect(self._on_delete_clicked)
         toolbar.addWidget(self.btn_delete)
 
+        # Кнопка отмены режима
+        self.btn_cancel = QPushButton("✖ Отмена")
+        self.btn_cancel.setToolTip("Отменить текущее действие и вернуться в режим выбора")
+        self.btn_cancel.clicked.connect(self._on_cancel_mode)
+        toolbar.addWidget(self.btn_cancel)
+
         toolbar.addSeparator()
 
         # Кнопка генерации SQL
@@ -104,7 +110,7 @@ class MainWindow(QMainWindow):
         self.btn_generate_sql.clicked.connect(self._update_sql_display)
         toolbar.addWidget(self.btn_generate_sql)
 
-        # Кнопка копирования SQL (дублер для удобства)
+        # Кнопка копирования SQL
         self.btn_copy_sql = QPushButton("📋 Копировать SQL")
         self.btn_copy_sql.setToolTip("Скопировать SQL-код в буфер обмена")
         self.btn_copy_sql.clicked.connect(self._on_copy_sql)
@@ -172,6 +178,7 @@ class MainWindow(QMainWindow):
         self.property_panel.entity_updated.connect(self._on_entity_updated)
         # При изменении проекта (добавление/удаление сущностей/связей)
         self.canvas.project_changed.connect(self._on_project_changed)
+        self.canvas.mode_changed.connect(self._on_mode_changed)
 
     def _on_entity_updated(self, entity_id):
         """Обработка обновления сущности."""
@@ -193,6 +200,25 @@ class MainWindow(QMainWindow):
         if sql:
             QApplication.clipboard().setText(sql)
             QMessageBox.information(self, "Успешно", "SQL-код скопирован в буфер обмена.")
+
+    def _on_cancel_mode(self):
+        """Отменить текущий режим и вернуться в режим выбора."""
+        self.canvas.cancel_current_mode()
+
+    def _on_mode_changed(self, mode: str):
+        """Обновить состояние кнопок при смене режима."""
+        # Сбрасываем стили всех кнопок
+        default_style = ""
+        active_style = "background-color: #e3f2fd; border: 1px solid #2196f3;"
+
+        self.btn_add_entity.setStyleSheet(default_style)
+        self.btn_add_relationship.setStyleSheet(default_style)
+
+        # Подсвечиваем активную кнопку
+        if mode == "ADD_ENTITY":
+            self.btn_add_entity.setStyleSheet(active_style)
+        elif mode == "ADD_RELATIONSHIP":
+            self.btn_add_relationship.setStyleSheet(active_style)
 
     def _on_add_entity_clicked(self):
         """Обработка нажатия кнопки добавления сущности."""
