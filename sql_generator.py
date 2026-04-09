@@ -87,43 +87,53 @@ class SqlGenerator:
 
     @staticmethod
     def _generate_foreign_keys(project: Project) -> List[str]:
-        """
-        Генерация ALTER TABLE для добавления внешних ключей.
-
-        Args:
-            project: Объект проекта
-
-        Returns:
-            List[str]: Список SQL-выражений для внешних ключей
-        """
+        """Генерация ALTER TABLE для добавления внешних ключей."""
         fk_statements = []
 
         for rel in project.relationships:
-            if rel.type != RelationType.ONE_TO_MANY:
-                continue
-
             source = project.get_entity_by_id(rel.source_entity_id)
             target = project.get_entity_by_id(rel.target_entity_id)
 
             if not source or not target:
                 continue
 
-            # Для связи 1:N внешний ключ добавляется в таблицу-потомка (target)
-            # Предполагаем, что связь идёт от родителя (source) к потомку (target)
-            # и используем первичный ключ родителя
-            pk_attrs = source.get_primary_key_attributes()
-            if not pk_attrs:
-                # Если нет PK, пропускаем
+            # Определяем, куда добавлять FOREIGN KEY
+            if rel.type == RelationType.ONE_TO_MANY:
+                # FK в таблице-потомке (target)
+                parent_table = source
+                child_table = target
+                parent_field = rel.source_field
+                child_field = rel.target_field
+            elif rel.type == RelationType.MANY_TO_ONE:
+                # FK в таблице-потомке (source)
+                parent_table = target
+                child_table = source
+                parent_field = rel.target_field
+                child_field = rel.source_field
+            elif rel.type == RelationType.ONE_TO_ONE:
+                # FK можно добавить в любую, добавим в target
+                parent_table = source
+                child_table = target
+                parent_field = rel.source_field
+                child_field = rel.target_field
+            else:
                 continue
 
-            pk_name = pk_attrs[0].name  # упрощённо: берём первый PK
+            # Если поля не указаны, пробуем найти PK
+            if not parent_field:
+                pk_attrs = parent_table.get_primary_key_attributes()
+                if pk_attrs:
+                    parent_field = pk_attrs[0].name
+                else:
+                    continue
 
-            # Имя внешнего ключа: fk_потомок_родитель
-            fk_name = f"fk_{target.name}_{source.name}"
+            if not child_field:
+                child_field = parent_field
 
+            fk_name = f"fk_{child_table.name}_{parent_table.name}"
             fk_sql = (
-                f"ALTER TABLE {target.name} ADD CONSTRAINT {fk_name} "
-                f"FOREIGN KEY ({pk_name}) REFERENCES {source.name}({pk_name});"
+                f"ALTER TABLE {child_table.name} ADD CONSTRAINT {fk_name} "
+                f"FOREIGN KEY ({child_field}) REFERENCES {parent_table.name}({parent_field});"
             )
             fk_statements.append(fk_sql)
 

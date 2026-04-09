@@ -29,6 +29,11 @@ class DataType(Enum):
 class RelationType(Enum):
     """Типы связей между сущностями."""
     ONE_TO_MANY = "1:N"
+    MANY_TO_ONE = "N:1"
+    ONE_TO_ONE = "1:1"
+
+    def __str__(self):
+        return self.value
 
 
 @dataclass
@@ -120,24 +125,28 @@ class Relationship:
     id: uuid.UUID = field(default_factory=uuid.uuid4)
     source_entity_id: uuid.UUID = None
     target_entity_id: uuid.UUID = None
+    source_field: str = ""  # поле-родитель (PRIMARY KEY)
+    target_field: str = ""  # поле-потомок (FOREIGN KEY)
     type: RelationType = RelationType.ONE_TO_MANY
 
     def to_dict(self) -> Dict[str, Any]:
-        """Сериализация в словарь."""
         return {
             "id": str(self.id),
             "source_entity_id": str(self.source_entity_id),
             "target_entity_id": str(self.target_entity_id),
+            "source_field": self.source_field,
+            "target_field": self.target_field,
             "type": self.type.value,
         }
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "Relationship":
-        """Десериализация из словаря."""
         return cls(
             id=uuid.UUID(data["id"]),
             source_entity_id=uuid.UUID(data["source_entity_id"]),
             target_entity_id=uuid.UUID(data["target_entity_id"]),
+            source_field=data.get("source_field", ""),
+            target_field=data.get("target_field", ""),
             type=RelationType(data["type"]),
         )
 

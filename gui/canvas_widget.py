@@ -3,16 +3,50 @@
 """
 
 import uuid
-from typing import Dict, Optional
+import math
+from typing import Dict, Optional, Tuple
 
 from PyQt6.QtWidgets import (
     QGraphicsView, QGraphicsScene, QGraphicsRectItem,
-    QGraphicsTextItem, QGraphicsLineItem
+    QGraphicsTextItem, QGraphicsLineItem, QGraphicsPolygonItem
 )
 from PyQt6.QtCore import pyqtSignal, Qt, QRectF, QPointF
-from PyQt6.QtGui import QPen, QBrush, QColor, QFont
+from PyQt6.QtGui import QPen, QBrush, QColor, QFont, QPolygonF
 
-from models import Project, Entity, Relationship
+from models import Project, Entity, Relationship, RelationType
+
+
+def get_edge_points(rect1: QRectF, rect2: QRectF) -> Tuple[QPointF, QPointF, float]:
+    """Вычисляет точки на краях прямоугольников для соединения линией."""
+    center1 = rect1.center()
+    center2 = rect2.center()
+
+    dx = center2.x() - center1.x()
+    dy = center2.y() - center1.y()
+    angle = math.degrees(math.atan2(dy, dx))
+
+    if abs(dx) > abs(dy):
+        if dx > 0:
+            point1 = QPointF(rect1.right(), center1.y())
+        else:
+            point1 = QPointF(rect1.left(), center1.y())
+
+        if dx > 0:
+            point2 = QPointF(rect2.left(), center2.y())
+        else:
+            point2 = QPointF(rect2.right(), center2.y())
+    else:
+        if dy > 0:
+            point1 = QPointF(center1.x(), rect1.bottom())
+        else:
+            point1 = QPointF(center1.x(), rect1.top())
+
+        if dy > 0:
+            point2 = QPointF(center2.x(), rect2.top())
+        else:
+            point2 = QPointF(center2.x(), rect2.bottom())
+
+    return point1, point2, angle
 
 
 class EntityItem(QGraphicsRectItem):
@@ -37,12 +71,10 @@ class EntityItem(QGraphicsRectItem):
 
     def _update_preview(self):
         """Обновить предпросмотр атрибутов."""
-        # Удаляем старые текстовые элементы (кроме name_item)
         for child in self.childItems()[:]:
             if child != self.name_item:
                 self.scene().removeItem(child)
 
-        # Показываем первые 3 атрибута
         y_pos = 30
         for attr in self.entity.attributes[:3]:
             text = f"{attr.name} : {attr.data_type}"
@@ -55,13 +87,11 @@ class EntityItem(QGraphicsRectItem):
             attr_item.setPos(10, y_pos)
             y_pos += 15
 
-        # Если атрибутов больше 3, показываем многоточие
         if len(self.entity.attributes) > 3:
             more_item = QGraphicsTextItem("...", self)
             more_item.setFont(QFont("Arial", 8))
             more_item.setPos(10, y_pos)
 
-        # Корректируем размер прямоугольника
         new_height = max(80, y_pos + 10)
         self.setRect(QRectF(0, 0, 150, new_height))
 
@@ -70,15 +100,16 @@ class EntityItem(QGraphicsRectItem):
         self.name_item.setPlainText(self.entity.name)
         self._update_preview()
 
-    def itemChange(self, change, value):
-        """Обработка перемещения."""
-        if change == QGraphicsRectItem.GraphicsItemChange.ItemPositionChange:
-            self.entity.position = value
-            # Обновляем связи
+    def mouseMoveEvent(self, event):
+        """Обработка перемещения мыши при перетаскивании."""
+        old_pos = self.pos()
+        super().mouseMoveEvent(event)
+        new_pos = self.pos()
+
+        if old_pos != new_pos:
+            self.entity.position = new_pos
             if self.canvas:
-                for rel_item in self.canvas.relationship_items.values():
-                    rel_item.update_position()
-        return super().itemChange(change, value)
+                self.canvas.update_all_relationships()
 
     def mouseDoubleClickEvent(self, event):
         """Двойной клик — выбор сущности."""
@@ -87,23 +118,100 @@ class EntityItem(QGraphicsRectItem):
 
 
 class RelationshipItem(QGraphicsLineItem):
-    """Графическое представление связи."""
+    """Графическое представление связи с текстовыми метками."""
 
-    def __init__(self, relationship: Relationship, source_item: EntityItem, target_item: EntityItem):
-        super().__init__()
+    def __init__(self, relationship: Relationship, canvas, parent=None):
+        super().__init__(parent)
         self.relationship_id = relationship.id
-        self.source_item = source_item
-        self.target_item = target_item
-        self.setPen(QPen(QColor(100, 100, 100), 2))
+        self.relationship = relationship
+        self.canvas = canvas
+        self.source_text = None
+        self.target_text = None
+
+        pen = QPen(QColor(80, 80, 80), 2)
+        self.setPen(pen)
         self.setFlag(QGraphicsLineItem.GraphicsItemFlag.ItemIsSelectable, True)
         self.update_position()
 
     def update_position(self):
-        """Обновить позицию линии связи."""
-        if self.source_item and self.target_item and self.source_item.scene() and self.target_item.scene():
-            source_center = self.source_item.sceneBoundingRect().center()
-            target_center = self.target_item.sceneBoundingRect().center()
-            self.setLine(source_center.x(), source_center.y(), target_center.x(), target_center.y())
+        """Обновить позицию линии связи и текстовых меток."""
+        if not self.canvas:
+            return
+
+        source_item = self.canvas.entity_items.get(self.relationship.source_entity_id)
+        target_item = self.canvas.entity_items.get(self.relationship.target_entity_id)
+
+        if source_item and target_item and source_item.scene() and target_item.scene():
+            rect1 = source_item.sceneBoundingRect()
+            rect2 = target_item.sceneBoundingRect()
+            p1, p2, angle = get_edge_points(rect1, rect2)
+            self.setLine(p1.x(), p1.y(), p2.x(), p2.y())
+            self._update_labels(p1, p2, angle, source_item, target_item)
+
+    def _update_labels(self, p1: QPointF, p2: QPointF, angle: float,
+                       source_item: EntityItem, target_item: EntityItem):
+        """Обновить текстовые метки на концах линии."""
+        # Удаляем старые метки
+        if self.source_text:
+            self.scene().removeItem(self.source_text)
+        if self.target_text:
+            self.scene().removeItem(self.target_text)
+
+        # Тип связи и метки
+        rel_type = self.relationship.type
+
+        if rel_type == RelationType.ONE_TO_MANY:
+            source_label = "1"
+            target_label = "N"
+        elif rel_type == RelationType.MANY_TO_ONE:
+            source_label = "N"
+            target_label = "1"
+        elif rel_type == RelationType.ONE_TO_ONE:
+            source_label = "1"
+            target_label = "1"
+        else:
+            source_label = "?"
+            target_label = "?"
+
+        # Вычисляем направление линии (от источника к цели)
+        dx = p2.x() - p1.x()
+        dy = p2.y() - p1.y()
+        length = math.sqrt(dx * dx + dy * dy)
+
+        if length > 0:
+            # Нормализованный вектор направления
+            nx = dx / length
+            ny = dy / length
+
+            # Вектор, перпендикулярный направлению (для небольшого смещения)
+            perp_x = -ny * 12
+            perp_y = nx * 12
+
+            # Позиция для метки источника (смещение вдоль линии наружу от сущности)
+            source_offset = 25
+            source_pos = QPointF(
+                p1.x() + nx * source_offset + perp_x,
+                p1.y() + ny * source_offset + perp_y
+            )
+
+            # Позиция для метки цели (смещение против направления линии наружу от сущности)
+            target_offset = 25
+            target_pos = QPointF(
+                p2.x() - nx * target_offset + perp_x,
+                p2.y() - ny * target_offset + perp_y
+            )
+
+            # Создаём метки
+            self.source_text = QGraphicsTextItem(source_label, self)
+            self.source_text.setFont(QFont("Arial", 11, QFont.Weight.Bold))
+            self.source_text.setDefaultTextColor(QColor(80, 80, 80))
+            # Центрируем текст относительно позиции
+            self.source_text.setPos(source_pos.x() - 8, source_pos.y() - 10)
+
+            self.target_text = QGraphicsTextItem(target_label, self)
+            self.target_text.setFont(QFont("Arial", 11, QFont.Weight.Bold))
+            self.target_text.setDefaultTextColor(QColor(80, 80, 80))
+            self.target_text.setPos(target_pos.x() - 8, target_pos.y() - 10)
 
 
 class CanvasWidget(QGraphicsView):
@@ -116,7 +224,7 @@ class CanvasWidget(QGraphicsView):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.project = None  # Будет установлен позже
+        self.project = None
         self.entity_items: Dict[uuid.UUID, EntityItem] = {}
         self.relationship_items: Dict[uuid.UUID, RelationshipItem] = {}
 
@@ -126,22 +234,24 @@ class CanvasWidget(QGraphicsView):
         self.setDragMode(QGraphicsView.DragMode.RubberBandDrag)
         self.setSceneRect(QRectF(0, 0, 2000, 2000))
 
-        # Режимы
         self.current_mode = "SELECT"
+
+        self.relation_start_item = None
         self.temp_line = None
-        self.source_entity_for_relation = None
+
+        self.pan_start = QPointF()
+        self.is_panning = False
 
         self.scene.selectionChanged.connect(self._on_selection_changed)
 
     def _on_selection_changed(self):
-        """Обработка изменения выделения в сцене."""
         if not self.scene.selectedItems():
             self.selection_cleared.emit()
 
     def set_mode(self, mode: str):
-        """Установить режим работы холста."""
         self.current_mode = mode
         self.mode_changed.emit(mode)
+
         if mode == "ADD_ENTITY":
             self.setDragMode(QGraphicsView.DragMode.NoDrag)
             self.viewport().setCursor(Qt.CursorShape.CrossCursor)
@@ -152,56 +262,19 @@ class CanvasWidget(QGraphicsView):
             self.setDragMode(QGraphicsView.DragMode.RubberBandDrag)
             self.viewport().setCursor(Qt.CursorShape.ArrowCursor)
 
-    def set_project(self, project: Project):
-        """Установить проект для отображения."""
-        self.project = project
-        self._clear_scene()
-        self._build_scene()
-
-    def _clear_scene(self):
-        """Очистить сцену."""
-        self.scene.clear()
-        self.entity_items.clear()
-        self.relationship_items.clear()
-
-    def _build_scene(self):
-        """Построить сцену из данных проекта."""
-        if not self.project:
-            return
-
-        for entity in self.project.entities:
-            self._add_entity_item(entity)
-
-        for rel in self.project.relationships:
-            source_item = self.entity_items.get(rel.source_entity_id)
-            target_item = self.entity_items.get(rel.target_entity_id)
-            if source_item and target_item:
-                rel_item = RelationshipItem(rel, source_item, target_item)
-                self.scene.addItem(rel_item)
-                self.relationship_items[rel.id] = rel_item
-
-    def _add_entity_item(self, entity: Entity) -> EntityItem:
-        """Добавить графический элемент сущности."""
-        item = EntityItem(entity, self)
-        item.setPos(entity.position)
-        self.scene.addItem(item)
-        self.entity_items[entity.id] = item
-        return item
-
     def cancel_current_mode(self):
-        """Отменить текущий режим и вернуться в режим выбора."""
         if self.current_mode != "SELECT":
-            # Если есть временная линия связи — удаляем
-            if self.temp_line:
-                self.scene.removeItem(self.temp_line)
-                self.temp_line = None
-            self.source_entity_for_relation = None
+            self._clear_temp_line()
+            self.relation_start_item = None
             self.set_mode("SELECT")
-            # Очищаем выделение на панели свойств
             self.selection_cleared.emit()
 
+    def _clear_temp_line(self):
+        if self.temp_line:
+            self.scene.removeItem(self.temp_line)
+            self.temp_line = None
+
     def keyPressEvent(self, event):
-        """Обработка нажатия клавиш."""
         if event.key() == Qt.Key.Key_Escape:
             self.cancel_current_mode()
         elif event.key() == Qt.Key.Key_Delete:
@@ -209,16 +282,60 @@ class CanvasWidget(QGraphicsView):
         else:
             super().keyPressEvent(event)
 
+    def set_project(self, project: Project):
+        self.project = project
+        self._clear_scene()
+        self._build_scene()
+
+    def _clear_scene(self):
+        self.scene.clear()
+        self.entity_items.clear()
+        self.relationship_items.clear()
+
+    def _build_scene(self):
+        if not self.project:
+            return
+
+        for entity in self.project.entities:
+            self._add_entity_item(entity)
+
+        for rel in self.project.relationships:
+            self._add_relationship_item(rel)
+
+    def _add_entity_item(self, entity: Entity) -> EntityItem:
+        item = EntityItem(entity, self)
+        item.setPos(entity.position)
+        self.scene.addItem(item)
+        self.entity_items[entity.id] = item
+        return item
+
+    def _add_relationship_item(self, rel: Relationship) -> Optional[RelationshipItem]:
+        source_item = self.entity_items.get(rel.source_entity_id)
+        target_item = self.entity_items.get(rel.target_entity_id)
+
+        if source_item and target_item:
+            if rel.id in self.relationship_items:
+                old_item = self.relationship_items.pop(rel.id)
+                self.scene.removeItem(old_item)
+
+            rel_item = RelationshipItem(rel, self)
+            self.scene.addItem(rel_item)
+            self.relationship_items[rel.id] = rel_item
+            rel_item.update_position()
+            return rel_item
+        return None
+
+    def update_all_relationships(self):
+        for rel_item in self.relationship_items.values():
+            rel_item.update_position()
+
     def update_entity(self, entity_id: uuid.UUID):
-        """Обновить отображение сущности."""
         item = self.entity_items.get(entity_id)
         if item:
             item.update_from_entity()
-            for rel_item in self.relationship_items.values():
-                rel_item.update_position()
+            self.update_all_relationships()
 
     def delete_selected(self):
-        """Удалить выбранные элементы."""
         if not self.project:
             return
 
@@ -248,25 +365,32 @@ class CanvasWidget(QGraphicsView):
                 self.scene.removeItem(item)
 
         for rel_id, rel_item in list(self.relationship_items.items()):
-            source_exists = rel_item.source_item in self.entity_items.values()
-            target_exists = rel_item.target_item in self.entity_items.values()
+            source_exists = rel_item.relationship.source_entity_id in self.entity_items
+            target_exists = rel_item.relationship.target_entity_id in self.entity_items
             if not (source_exists and target_exists):
                 self.scene.removeItem(rel_item)
                 del self.relationship_items[rel_id]
                 self.project.remove_relationship(rel_id)
 
+        self.update_all_relationships()
         self.project_changed.emit()
         self.selection_cleared.emit()
 
+    def _get_entity_at_position(self, pos: QPointF):
+        for item in self.scene.items():
+            if isinstance(item, EntityItem):
+                if item.sceneBoundingRect().contains(pos):
+                    return item
+        return None
+
     def mousePressEvent(self, event):
-        """Обработка нажатия мыши для режимов."""
-        # Проверяем, что проект существует
         if self.project is None:
             super().mousePressEvent(event)
             return
 
+        scene_pos = self.mapToScene(event.pos())
+
         if self.current_mode == "ADD_ENTITY":
-            scene_pos = self.mapToScene(event.pos())
             entity = Entity(name="Новая сущность", position=scene_pos)
             self.project.add_entity(entity)
             self._add_entity_item(entity)
@@ -275,48 +399,100 @@ class CanvasWidget(QGraphicsView):
             self.project_changed.emit()
             return
 
-        elif self.current_mode == "ADD_RELATIONSHIP":
-            item = self.itemAt(event.pos())
-            if isinstance(item, EntityItem):
-                self.source_entity_for_relation = item
+        if self.current_mode == "ADD_RELATIONSHIP":
+            start_entity = self._get_entity_at_position(scene_pos)
+            if start_entity:
+                self.relation_start_item = start_entity
                 self.temp_line = QGraphicsLineItem()
-                self.temp_line.setPen(QPen(QColor(255, 0, 0), 2))
+                pen = QPen(QColor(255, 0, 0), 2)
+                pen.setStyle(Qt.PenStyle.DashLine)
+                self.temp_line.setPen(pen)
                 self.scene.addItem(self.temp_line)
+                start_pos = self.relation_start_item.sceneBoundingRect().center()
+                self.temp_line.setLine(start_pos.x(), start_pos.y(), start_pos.x(), start_pos.y())
             return
 
-        else:
-            super().mousePressEvent(event)
+        if event.button() == Qt.MouseButton.RightButton:
+            self.is_panning = True
+            self.pan_start = event.pos()
+            self.setCursor(Qt.CursorShape.ClosedHandCursor)
+            event.accept()
+            return
+
+        super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event):
-        """Обработка движения мыши при создании связи."""
-        if self.current_mode == "ADD_RELATIONSHIP" and self.temp_line and self.source_entity_for_relation:
+        if self.is_panning:
+            delta = event.pos() - self.pan_start
+            self.horizontalScrollBar().setValue(self.horizontalScrollBar().value() - delta.x())
+            self.verticalScrollBar().setValue(self.verticalScrollBar().value() - delta.y())
+            self.pan_start = event.pos()
+            event.accept()
+            return
+
+        if self.current_mode == "ADD_RELATIONSHIP" and self.temp_line and self.relation_start_item:
             scene_pos = self.mapToScene(event.pos())
-            source_pos = self.source_entity_for_relation.sceneBoundingRect().center()
-            self.temp_line.setLine(source_pos.x(), source_pos.y(), scene_pos.x(), scene_pos.y())
-        else:
-            super().mouseMoveEvent(event)
+            start_pos = self.relation_start_item.sceneBoundingRect().center()
+            self.temp_line.setLine(start_pos.x(), start_pos.y(), scene_pos.x(), scene_pos.y())
+            return
+
+        super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event):
-        """Обработка завершения создания связи."""
-        if self.current_mode == "ADD_RELATIONSHIP" and self.temp_line:
-            target_item = self.itemAt(event.pos())
-            if (isinstance(target_item, EntityItem) and
-                target_item != self.source_entity_for_relation and
-                self.source_entity_for_relation is not None):
+        if self.is_panning:
+            self.is_panning = False
+            self.setCursor(Qt.CursorShape.ArrowCursor)
+            event.accept()
+            return
+
+        if self.current_mode == "ADD_RELATIONSHIP" and self.relation_start_item:
+            scene_pos = self.mapToScene(event.pos())
+            target_entity = self._get_entity_at_position(scene_pos)
+
+            if (target_entity and
+                target_entity != self.relation_start_item):
+
+                existing_rel = self.project.get_relationship(
+                    self.relation_start_item.entity_id,
+                    target_entity.entity_id
+                )
+
+                if not existing_rel:
+                    self._show_relationship_dialog(
+                        self.relation_start_item,
+                        target_entity
+                    )
+
+            self._clear_temp_line()
+            self.relation_start_item = None
+            self.set_mode("SELECT")
+            return
+
+        super().mouseReleaseEvent(event)
+
+    def _show_relationship_dialog(self, source_item: EntityItem, target_item: EntityItem):
+        from gui.relationship_dialog import RelationshipDialog
+
+        dialog = RelationshipDialog(source_item.entity, target_item.entity, self)
+        if dialog.exec() == dialog.DialogCode.Accepted:
+            source_field, target_field = dialog.get_selected_fields()
+            rel_type = dialog.get_relation_type()
+
+            if source_field and target_field:
                 rel = Relationship(
-                    source_entity_id=self.source_entity_for_relation.entity_id,
-                    target_entity_id=target_item.entity_id
+                    source_entity_id=source_item.entity_id,
+                    target_entity_id=target_item.entity_id,
+                    source_field=source_field,
+                    target_field=target_field,
+                    type=rel_type
                 )
                 self.project.add_relationship(rel)
-                rel_item = RelationshipItem(rel, self.source_entity_for_relation, target_item)
-                self.scene.addItem(rel_item)
-                self.relationship_items[rel.id] = rel_item
+                self._add_relationship_item(rel)
                 self.project_changed.emit()
 
-            if self.temp_line:
-                self.scene.removeItem(self.temp_line)
-                self.temp_line = None
-            self.source_entity_for_relation = None
-            self.set_mode("SELECT")
+    def wheelEvent(self, event):
+        zoom_factor = 1.1
+        if event.angleDelta().y() > 0:
+            self.scale(zoom_factor, zoom_factor)
         else:
-            super().mouseReleaseEvent(event)
+            self.scale(1 / zoom_factor, 1 / zoom_factor)
