@@ -15,13 +15,36 @@ from models import Entity, RelationType
 class RelationshipDialog(QDialog):
     """Диалог для выбора типа связи и полей."""
 
-    def __init__(self, source_entity: Entity, target_entity: Entity, parent=None):
+    def __init__(self, source_entity: Entity, target_entity: Entity, parent=None, existing_relationship=None):
         super().__init__(parent)
         self.source_entity = source_entity
         self.target_entity = target_entity
-        self.setWindowTitle("Создание связи")
+        self.existing_relationship = existing_relationship
+        self.setWindowTitle("Редактирование связи" if existing_relationship else "Создание связи")
         self.setMinimumWidth(450)
         self._setup_ui()
+
+        # Если редактируем существующую связь, заполняем поля
+        if existing_relationship:
+            self._load_existing_data()
+
+    def _load_existing_data(self):
+        """Загрузить данные существующей связи."""
+        # Устанавливаем тип связи
+        index = self.type_combo.findData(self.existing_relationship.type)
+        if index >= 0:
+            self.type_combo.setCurrentIndex(index)
+
+        # Устанавливаем поля
+        if self.existing_relationship.source_field:
+            idx = self.source_combo.findData(self.existing_relationship.source_field)
+            if idx >= 0:
+                self.source_combo.setCurrentIndex(idx)
+
+        if self.existing_relationship.target_field:
+            idx = self.target_combo.findData(self.existing_relationship.target_field)
+            if idx >= 0:
+                self.target_combo.setCurrentIndex(idx)
 
     def _setup_ui(self):
         layout = QVBoxLayout(self)

@@ -6,7 +6,7 @@ import uuid
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QSplitter, QFileDialog, QMessageBox, QToolBar,
-    QPushButton, QApplication
+    QPushButton, QApplication, QStatusBar
 )
 from PyQt6.QtCore import Qt, QPointF
 from PyQt6.QtGui import QAction
@@ -17,6 +17,8 @@ from sql_generator import SqlGenerator
 from gui.canvas_widget import CanvasWidget
 from gui.property_panel import PropertyPanelWidget
 from gui.sql_panel import SqlPanelWidget
+
+from collections import deque
 
 
 class MainWindow(QMainWindow):
@@ -38,6 +40,143 @@ class MainWindow(QMainWindow):
         self.canvas.set_project(self.project)
 
         self._update_sql_display()
+
+        self.undo_stack = deque(maxlen=50)
+        self.redo_stack = deque(maxlen=50)
+        self._save_state()
+
+        # Устанавливаем фокус на главное окно
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+
+    def keyPressEvent(self, event):
+        """Глобальная обработка горячих клавиш."""
+        ctrl = event.modifiers() & Qt.KeyboardModifier.ControlModifier
+        shift = event.modifiers() & Qt.KeyboardModifier.ShiftModifier
+
+        # Проверяем, не вводит ли пользователь текст
+        focused = QApplication.focusWidget()
+        is_typing = False
+
+        if focused:
+            from PyQt6.QtWidgets import QLineEdit, QTextEdit, QTableWidget
+            if isinstance(focused, (QLineEdit, QTextEdit, QTableWidget)):
+                # Если это QTableWidget, проверяем, не редактируется ли ячейка
+                if isinstance(focused, QTableWidget):
+                    if focused.state() != QTableWidget.State.EditingState:
+                        is_typing = False
+                    else:
+                        is_typing = True
+                else:
+                    is_typing = True
+
+        # A - Добавить сущность (только если не ввод текста)
+        if event.key() == Qt.Key.Key_A and not ctrl and not shift and not is_typing:
+            self._on_add_entity_clicked()
+            event.accept()
+            return
+
+        # R - Режим связи (только если не ввод текста)
+        elif event.key() == Qt.Key.Key_R and not ctrl and not shift and not is_typing:
+            self._on_add_relationship_clicked()
+            event.accept()
+            return
+
+        # Delete - удалить
+        elif event.key() == Qt.Key.Key_Delete:
+            self._on_delete_clicked()
+            event.accept()
+            return
+
+        # Esc - отмена режима
+        elif event.key() == Qt.Key.Key_Escape:
+            self.canvas.cancel_current_mode()
+            event.accept()
+            return
+
+        # Ctrl+Z - отмена
+        elif event.key() == Qt.Key.Key_Z and ctrl and not shift:
+            self.undo()
+            event.accept()
+            return
+
+        # Ctrl+Y - повтор
+        elif event.key() == Qt.Key.Key_Y and ctrl and not shift:
+            self.redo()
+            event.accept()
+            return
+
+        # Ctrl+N - Новый проект
+        elif event.key() == Qt.Key.Key_N and ctrl and not shift:
+            self.on_new_project()
+            event.accept()
+            return
+
+        # Ctrl+O - Открыть проект
+        elif event.key() == Qt.Key.Key_O and ctrl and not shift:
+            self.on_open_project()
+            event.accept()
+            return
+
+        # Ctrl+S - Сохранить проект
+        elif event.key() == Qt.Key.Key_S and ctrl and not shift:
+            self.on_save_project()
+            event.accept()
+            return
+
+        # Ctrl+Shift+S - Сохранить как
+        elif event.key() == Qt.Key.Key_S and ctrl and shift:
+            self.on_save_as_project()
+            event.accept()
+            return
+
+        # Ctrl+E - Экспорт SQL
+        elif event.key() == Qt.Key.Key_E and ctrl and not shift:
+            self.on_export_sql()
+            event.accept()
+            return
+
+        else:
+            super().keyPressEvent(event)
+
+    def _is_text_input_focused(self) -> bool:
+        """
+        Проверяет, находится ли фокус на виджете ввода текста.
+        Если да — не перехватываем клавиши A, R, Delete.
+        """
+        focused = QApplication.focusWidget()
+        if focused:
+            # Проверяем тип виджета
+            from PyQt6.QtWidgets import QLineEdit, QTextEdit, QTableWidget
+            if isinstance(focused, (QLineEdit, QTextEdit, QTableWidget)):
+                return True
+        return False
+
+    def _save_state(self):
+        """Сохранить текущее состояние для Undo."""
+        import copy
+        state = copy.deepcopy(self.project.to_dict())
+        self.undo_stack.append(state)
+        self.redo_stack.clear()
+
+    def undo(self):
+        """Отменить последнее действие."""
+        if len(self.undo_stack) > 1:
+            self.redo_stack.append(self.undo_stack.pop())
+            prev_state = self.undo_stack[-1]
+            self.project = Project.from_dict(prev_state)
+            self.canvas.set_project(self.project)
+            self._update_sql_display()
+            self.update_status()
+
+    def redo(self):
+        """Повторить отменённое действие."""
+        if self.redo_stack:
+            state = self.redo_stack.pop()
+            self.undo_stack.append(state)
+            self.project = Project.from_dict(state)
+            self.canvas.set_project(self.project)
+            self._update_sql_display()
+            self.update_status()
 
     def _setup_ui(self):
         """Настройка интерфейса."""
@@ -72,6 +211,31 @@ class MainWindow(QMainWindow):
 
         self.canvas.set_project(self.project)
 
+        self.statusBar = QStatusBar()
+        self.setStatusBar(self.statusBar)
+        self.update_status()
+
+    def update_status(self):
+        """Обновить статусную строку."""
+        entities_count = len(self.project.entities)
+        relationships_count = len(self.project.relationships)
+
+        mode_text = {
+            "SELECT": "Режим выбора",
+            "ADD_ENTITY": "Режим добавления сущностей",
+            "ADD_RELATIONSHIP": "Режим создания связей"
+        }.get(self.canvas.current_mode, "")
+
+        status = f"Сущностей: {entities_count} | Связей: {relationships_count}"
+        if mode_text:
+            status += f" | {mode_text}"
+
+        self.statusBar.showMessage(status)
+
+    def _on_project_changed(self):
+        self._update_sql_display()
+        self.update_status()  # добавляем обновление статуса
+
     def _create_toolbar(self):
         """Создание панели инструментов с кнопками."""
         toolbar = QToolBar("Инструменты")
@@ -103,12 +267,6 @@ class MainWindow(QMainWindow):
         toolbar.addWidget(self.btn_cancel)
 
         toolbar.addSeparator()
-
-        # Кнопка генерации SQL
-        self.btn_generate_sql = QPushButton("⚡ Сгенерировать SQL")
-        self.btn_generate_sql.setToolTip("Обновить SQL-код по текущей диаграмме")
-        self.btn_generate_sql.clicked.connect(self._update_sql_display)
-        toolbar.addWidget(self.btn_generate_sql)
 
         # Кнопка копирования SQL
         self.btn_copy_sql = QPushButton("📋 Копировать SQL")
@@ -179,6 +337,8 @@ class MainWindow(QMainWindow):
         # При изменении проекта (добавление/удаление сущностей/связей)
         self.canvas.project_changed.connect(self._on_project_changed)
         self.canvas.mode_changed.connect(self._on_mode_changed)
+        self.canvas.undo_requested.connect(self.undo)
+        self.canvas.redo_requested.connect(self.redo)
 
     def _on_entity_updated(self, entity_id):
         """Обработка обновления сущности."""
@@ -219,6 +379,8 @@ class MainWindow(QMainWindow):
             self.btn_add_entity.setStyleSheet(active_style)
         elif mode == "ADD_RELATIONSHIP":
             self.btn_add_relationship.setStyleSheet(active_style)
+
+        self.update_status()
 
     def _on_add_entity_clicked(self):
         """Обработка нажатия кнопки добавления сущности."""

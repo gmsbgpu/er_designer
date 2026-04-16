@@ -8,7 +8,8 @@ from typing import Dict, Optional, Tuple
 
 from PyQt6.QtWidgets import (
     QGraphicsView, QGraphicsScene, QGraphicsRectItem,
-    QGraphicsTextItem, QGraphicsLineItem, QGraphicsPolygonItem
+    QGraphicsTextItem, QGraphicsLineItem, QGraphicsPolygonItem,
+    QMenu, QInputDialog
 )
 from PyQt6.QtCore import pyqtSignal, Qt, QRectF, QPointF
 from PyQt6.QtGui import QPen, QBrush, QColor, QFont, QPolygonF
@@ -213,6 +214,32 @@ class RelationshipItem(QGraphicsLineItem):
             self.target_text.setDefaultTextColor(QColor(80, 80, 80))
             self.target_text.setPos(target_pos.x() - 8, target_pos.y() - 10)
 
+    def mouseDoubleClickEvent(self, event):
+        """Двойной клик по связи — открыть диалог редактирования."""
+        from gui.relationship_dialog import RelationshipDialog
+
+        source_item = self.canvas.entity_items.get(self.relationship.source_entity_id)
+        target_item = self.canvas.entity_items.get(self.relationship.target_entity_id)
+
+        if source_item and target_item:
+            dialog = RelationshipDialog(
+                source_item.entity,
+                target_item.entity,
+                self.canvas,
+                self.relationship  # передаём существующую связь
+            )
+            if dialog.exec() == dialog.DialogCode.Accepted:
+                source_field, target_field = dialog.get_selected_fields()
+                rel_type = dialog.get_relation_type()
+
+                # Обновляем связь
+                self.relationship.source_field = source_field
+                self.relationship.target_field = target_field
+                self.relationship.type = rel_type
+
+                self.update_position()
+                self.canvas.project_changed.emit()
+
 
 class CanvasWidget(QGraphicsView):
     """Виджет холста для отображения и редактирования ER-диаграммы."""
@@ -221,6 +248,8 @@ class CanvasWidget(QGraphicsView):
     selection_cleared = pyqtSignal()
     project_changed = pyqtSignal()
     mode_changed = pyqtSignal(str)
+    undo_requested = pyqtSignal()
+    redo_requested = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -275,10 +304,12 @@ class CanvasWidget(QGraphicsView):
             self.temp_line = None
 
     def keyPressEvent(self, event):
-        if event.key() == Qt.Key.Key_Escape:
-            self.cancel_current_mode()
-        elif event.key() == Qt.Key.Key_Delete:
+        """Обработка нажатия клавиш на холсте."""
+        # Обрабатываем только Delete и Esc
+        if event.key() == Qt.Key.Key_Delete:
             self.delete_selected()
+        elif event.key() == Qt.Key.Key_Escape:
+            self.cancel_current_mode()
         else:
             super().keyPressEvent(event)
 
@@ -419,6 +450,16 @@ class CanvasWidget(QGraphicsView):
             event.accept()
             return
 
+        if self.current_mode == "SELECT":
+            if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
+                # Ctrl+клик — добавляем к выделению
+                self.setDragMode(QGraphicsView.DragMode.RubberBandDrag)
+            else:
+                # Обычный клик — сбрасываем выделение, если не на элементе
+                item = self.itemAt(event.pos())
+                if not item:
+                    self.scene.clearSelection()
+
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event):
@@ -450,7 +491,7 @@ class CanvasWidget(QGraphicsView):
             target_entity = self._get_entity_at_position(scene_pos)
 
             if (target_entity and
-                target_entity != self.relation_start_item):
+                    target_entity != self.relation_start_item):
 
                 existing_rel = self.project.get_relationship(
                     self.relation_start_item.entity_id,
@@ -496,3 +537,87 @@ class CanvasWidget(QGraphicsView):
             self.scale(zoom_factor, zoom_factor)
         else:
             self.scale(1 / zoom_factor, 1 / zoom_factor)
+
+    def contextMenuEvent(self, event):
+        """Показать контекстное меню."""
+        item = self.itemAt(event.pos())
+
+        if item is None:
+            return
+
+        menu = QMenu(self)
+
+        if isinstance(item, EntityItem):
+            rename_action = menu.addAction("✏ Переименовать")
+            add_attr_action = menu.addAction("➕ Добавить атрибут")
+            menu.addSeparator()
+            delete_action = menu.addAction("🗑 Удалить")
+
+            action = menu.exec(event.globalPos())
+
+            if action == rename_action:
+                self._rename_entity(item)
+            elif action == add_attr_action:
+                # Открываем диалог добавления атрибута напрямую
+                self._show_add_attribute_dialog(item.entity)
+            elif action == delete_action:
+                self.scene.clearSelection()
+                item.setSelected(True)
+                self.delete_selected()
+
+        elif isinstance(item, RelationshipItem):
+            edit_action = menu.addAction("✏ Редактировать связь")
+            menu.addSeparator()
+            delete_action = menu.addAction("🗑 Удалить связь")
+
+            action = menu.exec(event.globalPos())
+
+            if action == edit_action:
+                item.mouseDoubleClickEvent(None)
+            elif action == delete_action:
+                self.project.remove_relationship(item.relationship_id)
+                self.scene.removeItem(item)
+                del self.relationship_items[item.relationship_id]
+                self.project_changed.emit()
+
+    def _rename_entity(self, entity_item: EntityItem):
+        """Переименовать сущность через диалог."""
+        from PyQt6.QtWidgets import QInputDialog
+
+        new_name, ok = QInputDialog.getText(
+            self, "Переименование",
+            "Новое имя сущности:",
+            text=entity_item.entity.name
+        )
+
+        if ok and new_name:
+            entity_item.entity.name = new_name
+            entity_item.update_from_entity()
+            self.entity_selected.emit(entity_item.entity)
+            self.project_changed.emit()
+
+    def _show_add_attribute_dialog(self, entity: Entity):
+        """Показать диалог добавления атрибута для сущности."""
+        from gui.dialogs import AttributeDialog
+
+        dialog = AttributeDialog(self)
+        if dialog.exec() == dialog.DialogCode.Accepted:
+            data = dialog.get_attribute_data()
+
+            from models import Attribute
+            new_attr = Attribute(
+                name=data["name"],
+                data_type=data["data_type"],
+                is_primary_key=data["is_primary_key"],
+                is_not_null=data["is_not_null"],
+                is_unique=data["is_unique"]
+            )
+            entity.add_attribute(new_attr)
+
+            # Обновляем отображение сущности
+            entity_item = self.entity_items.get(entity.id)
+            if entity_item:
+                entity_item.update_from_entity()
+
+            self.entity_selected.emit(entity)
+            self.project_changed.emit()
