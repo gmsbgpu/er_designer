@@ -7,7 +7,9 @@ from models import Project, Entity, DataType, RelationType
 
 
 class SqlGenerator:
-    """Генератор SQL-скриптов на основе модели проекта."""
+    """Генератор SQL DDL в диалекте PostgreSQL."""
+
+    DIALECT_NAME = "PostgreSQL"
 
     @staticmethod
     def _quote_identifier(identifier: str) -> str:
@@ -79,6 +81,8 @@ class SqlGenerator:
             str: Полный SQL-скрипт
         """
         script_lines = []
+        script_lines.append(f"-- SQL dialect: {SqlGenerator.DIALECT_NAME}")
+        script_lines.append("")
 
         for entity in project.entities:
             script_lines.append(SqlGenerator._generate_create_table(entity))

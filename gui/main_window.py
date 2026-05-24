@@ -221,7 +221,7 @@ class MainWindow(QMainWindow):
         main_layout.addWidget(splitter)
 
         self.sql_panel = SqlPanelWidget(self)
-        self.sql_dock = QDockWidget("SQL-скрипт", self)
+        self.sql_dock = QDockWidget("SQL-скрипт (PostgreSQL)", self)
         self.sql_dock.setObjectName("sqlDock")
         self.sql_dock.setWidget(self.sql_panel)
         self.sql_dock.setAllowedAreas(Qt.DockWidgetArea.BottomDockWidgetArea)
@@ -332,7 +332,7 @@ class MainWindow(QMainWindow):
 
         file_menu.addSeparator()
 
-        self.export_sql_action = QAction("Экспорт SQL...", self)
+        self.export_sql_action = QAction("Экспорт SQL (PostgreSQL)...", self)
         self.export_sql_action.triggered.connect(self.on_export_sql)
         file_menu.addAction(self.export_sql_action)
 
@@ -553,7 +553,7 @@ class MainWindow(QMainWindow):
             return
 
         file_path, _ = QFileDialog.getSaveFileName(
-            self, "Экспорт SQL", self.project.name,
+            self, "Экспорт SQL (PostgreSQL)", self.project.name,
             "SQL Files (*.sql);;All Files (*)"
         )
         if file_path:

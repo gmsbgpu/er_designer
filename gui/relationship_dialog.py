@@ -141,7 +141,25 @@ class RelationshipDialog(QDialog):
             QMessageBox.warning(self, "Ошибка", "Выберите поле во второй сущности.")
             return
 
+        source_attr = self._get_attribute_by_name(self.source_entity, source_field)
+        target_attr = self._get_attribute_by_name(self.target_entity, target_field)
+        if source_attr and target_attr and source_attr.data_type != target_attr.data_type:
+            QMessageBox.warning(
+                self,
+                "Несовместимые типы",
+                "Для связи выбраны поля разных типов:\n"
+                f"{source_field}: {source_attr.data_type}\n"
+                f"{target_field}: {target_attr.data_type}"
+            )
+            return
+
         self.accept()
+
+    def _get_attribute_by_name(self, entity: Entity, field_name: str):
+        for attr in entity.attributes:
+            if attr.name == field_name:
+                return attr
+        return None
 
     def get_selected_fields(self):
         """Получить выбранные поля."""

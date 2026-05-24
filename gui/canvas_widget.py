@@ -86,8 +86,10 @@ class EntityItem(QGraphicsRectItem):
                 highlight = QGraphicsRectItem(4, y_pos + 1, self.WIDTH - 8, row_height - 2, self)
                 highlight.setBrush(QBrush(QColor(232, 238, 240)))
                 highlight.setPen(QPen(Qt.PenStyle.NoPen))
+                highlight.setZValue(-1)
 
             attr_item.setPos(self.ATTRIBUTE_LEFT_PADDING, y_pos)
+            attr_item.setZValue(1)
             self._attribute_rows.append((attr.name, y_pos, row_height))
             y_pos += row_height
 
@@ -194,6 +196,9 @@ class RelationshipItem(QGraphicsPathItem):
     ROUTE_MARGIN = 34
     ARROW_SIZE = 11
     STACKED_THRESHOLD = 90
+    LABEL_LINE_GAP = 6
+    LABEL_ENTITY_GAP = 7
+    LABEL_VERTICAL_NUDGE = 6
 
     def __init__(self, relationship: Relationship, canvas, parent=None):
         super().__init__(parent)
@@ -315,10 +320,16 @@ class RelationshipItem(QGraphicsPathItem):
 
         side = 1 if outer_point.x() >= anchor.x() else -1
         bounds = text_item.boundingRect()
-        x = anchor.x() + side * 12
+        x = anchor.x() + side * self.LABEL_ENTITY_GAP
         if side < 0:
             x -= bounds.width()
-        text_item.setPos(x, anchor.y() - bounds.height() - 7)
+
+        if abs(outer_point.y() - anchor.y()) < 1:
+            y = anchor.y() - bounds.height() - self.LABEL_LINE_GAP
+        else:
+            y = anchor.y() - bounds.height() / 2
+
+        text_item.setPos(x, y + self.LABEL_VERTICAL_NUDGE)
         return text_item
 
     def _update_arrow(self, points):

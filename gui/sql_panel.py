@@ -1,6 +1,4 @@
-"""
-Панель для отображения сгенерированного SQL-кода.
-"""
+"""Панель для отображения сгенерированного SQL-кода PostgreSQL."""
 
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QTextEdit, QPushButton, QHBoxLayout, QApplication
@@ -9,7 +7,7 @@ from PyQt6.QtGui import QFont
 
 
 class SqlPanelWidget(QWidget):
-    """Панель с отображением SQL-кода и кнопкой копирования."""
+    """Панель с отображением SQL-кода PostgreSQL и кнопкой копирования."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
