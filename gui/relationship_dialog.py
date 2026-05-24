@@ -15,33 +15,35 @@ from models import Entity, RelationType
 class RelationshipDialog(QDialog):
     """Диалог для выбора типа связи и полей."""
 
-    def __init__(self, source_entity: Entity, target_entity: Entity, parent=None, existing_relationship=None):
+    def __init__(self, source_entity: Entity, target_entity: Entity, parent=None,
+                 existing_relationship=None, source_field=None, target_field=None,
+                 fields_locked=False):
         super().__init__(parent)
         self.source_entity = source_entity
         self.target_entity = target_entity
         self.existing_relationship = existing_relationship
+        self.preselected_source_field = source_field
+        self.preselected_target_field = target_field
+        self.fields_locked = fields_locked
         self.setWindowTitle("Редактирование связи" if existing_relationship else "Создание связи")
         self.setMinimumWidth(450)
         self._setup_ui()
 
-        # Если редактируем существующую связь, заполняем поля
         if existing_relationship:
             self._load_existing_data()
 
     def _load_existing_data(self):
         """Загрузить данные существующей связи."""
-        # Устанавливаем тип связи
         index = self.type_combo.findData(self.existing_relationship.type)
         if index >= 0:
             self.type_combo.setCurrentIndex(index)
 
-        # Устанавливаем поля
-        if self.existing_relationship.source_field:
+        if self.source_combo and self.existing_relationship.source_field:
             idx = self.source_combo.findData(self.existing_relationship.source_field)
             if idx >= 0:
                 self.source_combo.setCurrentIndex(idx)
 
-        if self.existing_relationship.target_field:
+        if self.target_combo and self.existing_relationship.target_field:
             idx = self.target_combo.findData(self.existing_relationship.target_field)
             if idx >= 0:
                 self.target_combo.setCurrentIndex(idx)
@@ -49,7 +51,6 @@ class RelationshipDialog(QDialog):
     def _setup_ui(self):
         layout = QVBoxLayout(self)
 
-        # Информация о сущностях
         info_label = QLabel(
             f"Связь между «{self.source_entity.name}» и «{self.target_entity.name}»"
         )
@@ -59,7 +60,6 @@ class RelationshipDialog(QDialog):
 
         layout.addSpacing(10)
 
-        # Выбор типа связи
         type_group = QGroupBox("Тип связи")
         type_layout = QVBoxLayout(type_group)
 
@@ -67,7 +67,6 @@ class RelationshipDialog(QDialog):
         for rel_type in RelationType:
             self.type_combo.addItem(rel_type.value, rel_type)
 
-        # Пояснение
         type_hint = QLabel(
             "• 1:N — один родитель, много потомков (FOREIGN KEY в потомке)\n"
             "• N:1 — много родителей, один потомок\n"
@@ -82,37 +81,44 @@ class RelationshipDialog(QDialog):
 
         layout.addSpacing(10)
 
-        # Группа для выбора полей
-        fields_group = QGroupBox("Выбор полей для связи")
+        fields_group = QGroupBox("Поля связи")
         form_layout = QFormLayout(fields_group)
 
-        # Поле родителя
-        self.source_combo = QComboBox()
-        self.source_combo.addItem("-- выберите поле --", None)
-        for attr in self.source_entity.attributes:
-            pk_mark = " (PK)" if attr.is_primary_key else ""
-            self.source_combo.addItem(
-                f"{attr.name}{pk_mark} [{attr.data_type}]",
-                attr.name
-            )
-        form_layout.addRow("Поле в первой сущности:", self.source_combo)
+        self.source_combo = None
+        self.target_combo = None
 
-        # Поле потомка
-        self.target_combo = QComboBox()
-        self.target_combo.addItem("-- выберите поле --", None)
-        for attr in self.target_entity.attributes:
-            pk_mark = " (PK)" if attr.is_primary_key else ""
-            self.target_combo.addItem(
-                f"{attr.name}{pk_mark} [{attr.data_type}]",
-                attr.name
-            )
-        form_layout.addRow("Поле во второй сущности:", self.target_combo)
+        if self.fields_locked:
+            source_text = f"{self.source_entity.name}.{self.preselected_source_field}"
+            target_text = f"{self.target_entity.name}.{self.preselected_target_field}"
+            field_label = QLabel(f"{source_text} → {target_text}")
+            field_label.setStyleSheet("font-weight: bold; color: #3e5e66;")
+            field_label.setWordWrap(True)
+            form_layout.addRow("Выбранные поля:", field_label)
+        else:
+            self.source_combo = QComboBox()
+            self.source_combo.addItem("-- выберите поле --", None)
+            for attr in self.source_entity.attributes:
+                pk_mark = " (PK)" if attr.is_primary_key else ""
+                self.source_combo.addItem(
+                    f"{attr.name}{pk_mark} [{attr.data_type}]",
+                    attr.name
+                )
+            form_layout.addRow("Поле в первой сущности:", self.source_combo)
+
+            self.target_combo = QComboBox()
+            self.target_combo.addItem("-- выберите поле --", None)
+            for attr in self.target_entity.attributes:
+                pk_mark = " (PK)" if attr.is_primary_key else ""
+                self.target_combo.addItem(
+                    f"{attr.name}{pk_mark} [{attr.data_type}]",
+                    attr.name
+                )
+            form_layout.addRow("Поле во второй сущности:", self.target_combo)
 
         layout.addWidget(fields_group)
 
         layout.addSpacing(10)
 
-        # Кнопки
         button_layout = QHBoxLayout()
         self.btn_ok = QPushButton("Создать связь")
         self.btn_ok.clicked.connect(self._on_ok)
@@ -125,8 +131,7 @@ class RelationshipDialog(QDialog):
 
     def _on_ok(self):
         """Проверка и подтверждение."""
-        source_field = self.source_combo.currentData()
-        target_field = self.target_combo.currentData()
+        source_field, target_field = self.get_selected_fields()
 
         if not source_field:
             QMessageBox.warning(self, "Ошибка", "Выберите поле в первой сущности.")
@@ -140,6 +145,12 @@ class RelationshipDialog(QDialog):
 
     def get_selected_fields(self):
         """Получить выбранные поля."""
+        if self.fields_locked:
+            return (
+                self.preselected_source_field,
+                self.preselected_target_field
+            )
+
         return (
             self.source_combo.currentData(),
             self.target_combo.currentData()

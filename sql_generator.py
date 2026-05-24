@@ -3,11 +3,17 @@
 """
 
 from typing import List
-from models import Project, Entity, Attribute, Relationship, DataType, RelationType
+from models import Project, Entity, DataType, RelationType
 
 
 class SqlGenerator:
     """Генератор SQL-скриптов на основе модели проекта."""
+
+    @staticmethod
+    def _quote_identifier(identifier: str) -> str:
+        """Экранировать имя таблицы, поля или ограничения."""
+        escaped = identifier.replace('"', '""')
+        return f'"{escaped}"'
 
     @staticmethod
     def _map_data_type_to_sql(data_type: DataType, length: int = 255) -> str:
@@ -36,10 +42,13 @@ class SqlGenerator:
         Returns:
             str: SQL-выражение CREATE TABLE
         """
-        lines = [f"CREATE TABLE {entity.name} ("]
+        table_name = SqlGenerator._quote_identifier(entity.name)
+        if not entity.attributes:
+            return f"-- Таблица {table_name} не содержит полей; CREATE TABLE не сгенерирован."
 
-        # Добавляем все атрибуты
-        for i, attr in enumerate(entity.attributes):
+        lines = [f"CREATE TABLE {table_name} ("]
+
+        for attr in entity.attributes:
             type_sql = SqlGenerator._map_data_type_to_sql(attr.data_type)
             constraints = []
 
@@ -51,10 +60,10 @@ class SqlGenerator:
                 constraints.append("UNIQUE")
 
             constraints_str = " " + " ".join(constraints) if constraints else ""
-            line = f"    {attr.name} {type_sql}{constraints_str}"
+            attr_name = SqlGenerator._quote_identifier(attr.name)
+            line = f"    {attr_name} {type_sql}{constraints_str}"
             lines.append(line)
 
-        # Закрываем скобку
         lines.append(");")
         return "\n".join(lines)
 
@@ -71,12 +80,10 @@ class SqlGenerator:
         """
         script_lines = []
 
-        # Генерируем CREATE TABLE для каждой сущности
         for entity in project.entities:
             script_lines.append(SqlGenerator._generate_create_table(entity))
-            script_lines.append("")  # пустая строка для разделения
+            script_lines.append("")
 
-        # Генерируем FOREIGN KEY для связей
         fk_lines = SqlGenerator._generate_foreign_keys(project)
         if fk_lines:
             script_lines.append("-- Связи (FOREIGN KEY)")
@@ -97,21 +104,17 @@ class SqlGenerator:
             if not source or not target:
                 continue
 
-            # Определяем, куда добавлять FOREIGN KEY
             if rel.type == RelationType.ONE_TO_MANY:
-                # FK в таблице-потомке (target)
                 parent_table = source
                 child_table = target
                 parent_field = rel.source_field
                 child_field = rel.target_field
             elif rel.type == RelationType.MANY_TO_ONE:
-                # FK в таблице-потомке (source)
                 parent_table = target
                 child_table = source
                 parent_field = rel.target_field
                 child_field = rel.source_field
             elif rel.type == RelationType.ONE_TO_ONE:
-                # FK можно добавить в любую, добавим в target
                 parent_table = source
                 child_table = target
                 parent_field = rel.source_field
@@ -119,7 +122,6 @@ class SqlGenerator:
             else:
                 continue
 
-            # Если поля не указаны, пробуем найти PK
             if not parent_field:
                 pk_attrs = parent_table.get_primary_key_attributes()
                 if pk_attrs:
@@ -131,9 +133,14 @@ class SqlGenerator:
                 child_field = parent_field
 
             fk_name = f"fk_{child_table.name}_{parent_table.name}"
+            fk_name_sql = SqlGenerator._quote_identifier(fk_name)
+            child_table_sql = SqlGenerator._quote_identifier(child_table.name)
+            parent_table_sql = SqlGenerator._quote_identifier(parent_table.name)
+            child_field_sql = SqlGenerator._quote_identifier(child_field)
+            parent_field_sql = SqlGenerator._quote_identifier(parent_field)
             fk_sql = (
-                f"ALTER TABLE {child_table.name} ADD CONSTRAINT {fk_name} "
-                f"FOREIGN KEY ({child_field}) REFERENCES {parent_table.name}({parent_field});"
+                f"ALTER TABLE {child_table_sql} ADD CONSTRAINT {fk_name_sql} "
+                f"FOREIGN KEY ({child_field_sql}) REFERENCES {parent_table_sql}({parent_field_sql});"
             )
             fk_statements.append(fk_sql)
 
