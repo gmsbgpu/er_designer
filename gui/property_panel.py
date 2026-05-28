@@ -227,6 +227,11 @@ class PropertyPanelWidget(QWidget):
                 return
 
             old_name = attr.name
+            type_conflict = self._get_relationship_type_conflict(old_name, new_name, data["data_type"])
+            if type_conflict:
+                QMessageBox.warning(self, "Несовместимые типы", type_conflict)
+                return
+
             attr.name = new_name
             attr.data_type = data["data_type"]
             attr.is_primary_key = data["is_primary_key"]
@@ -317,3 +322,36 @@ class PropertyPanelWidget(QWidget):
                 rel.source_field = new_name
             if rel.target_entity_id == self.current_entity.id and rel.target_field == old_name:
                 rel.target_field = new_name
+
+    def _get_relationship_type_conflict(self, old_name: str, new_name: str, new_type):
+        if not self.project or not self.current_entity:
+            return None
+
+        for rel in self.project.relationships:
+            if rel.source_entity_id == self.current_entity.id and rel.source_field == old_name:
+                other_entity = self.project.get_entity_by_id(rel.target_entity_id)
+                other_field = rel.target_field
+            elif rel.target_entity_id == self.current_entity.id and rel.target_field == old_name:
+                other_entity = self.project.get_entity_by_id(rel.source_entity_id)
+                other_field = rel.source_field
+            else:
+                continue
+
+            other_attr = self._find_attribute_by_name(other_entity, other_field)
+            if other_attr and other_attr.data_type != new_type:
+                return (
+                    "Поле участвует в связи с полем другого типа:\n"
+                    f"{self.current_entity.name}.{new_name}: {new_type}\n"
+                    f"{other_entity.name}.{other_field}: {other_attr.data_type}"
+                )
+
+        return None
+
+    def _find_attribute_by_name(self, entity: Optional[Entity], attr_name: str):
+        if not entity:
+            return None
+
+        for attr in entity.attributes:
+            if attr.name == attr_name:
+                return attr
+        return None

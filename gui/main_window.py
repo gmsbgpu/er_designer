@@ -512,8 +512,9 @@ class MainWindow(QMainWindow):
         )
         if file_path:
             try:
+                project = JsonSerializer.load_project(file_path)
                 self.current_file_path = file_path
-                self._set_project(JsonSerializer.load_project(file_path))
+                self._set_project(project)
                 self._reset_history()
                 self.update_title()
             except Exception as e:
@@ -522,9 +523,8 @@ class MainWindow(QMainWindow):
     def on_save_project(self):
         """Сохранить текущий проект."""
         if self.current_file_path:
-            self._save_to_file(self.current_file_path)
-        else:
-            self.on_save_as_project()
+            return self._save_to_file(self.current_file_path)
+        return self.on_save_as_project()
 
     def on_save_as_project(self):
         """Сохранить проект как..."""
@@ -533,24 +533,28 @@ class MainWindow(QMainWindow):
             "Проект ER-Designer (*.erd);;Файлы JSON (*.json);;Все файлы (*)"
         )
         if file_path:
-            self._save_to_file(file_path)
-            self.current_file_path = file_path
-            self.update_title()
+            return self._save_to_file(file_path)
+        return False
 
     def _save_to_file(self, path):
         """Сохранение проекта в файл."""
         try:
             JsonSerializer.save_project(self.project, path)
+            self.current_file_path = path
+            self.update_title()
             QMessageBox.information(self, "Успешно", "Проект сохранён.")
+            return True
         except Exception as e:
             QMessageBox.critical(self, "Ошибка", f"Не удалось сохранить файл:\n{e}")
+            return False
 
     def on_export_sql(self):
         """Экспорт SQL-скрипта в файл."""
-        sql = SqlGenerator.generate_ddl(self.project)
-        if not sql.strip():
+        if not self.project.entities:
             QMessageBox.warning(self, "Нет данных", "Нет сущностей для экспорта.")
             return
+
+        sql = SqlGenerator.generate_ddl(self.project)
 
         file_path, _ = QFileDialog.getSaveFileName(
             self, "Экспорт SQL (PostgreSQL)", self.project.name,
@@ -580,8 +584,7 @@ class MainWindow(QMainWindow):
         clicked_button = message.clickedButton()
 
         if clicked_button == save_button:
-            self.on_save_project()
-            return True
+            return self.on_save_project()
         elif clicked_button == dont_save_button:
             return True
         return False

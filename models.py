@@ -62,11 +62,11 @@ class Attribute:
         """Десериализация из словаря."""
         return cls(
             id=uuid.UUID(data["id"]),
-            name=data["name"],
-            data_type=DataType(data["data_type"]),
-            is_primary_key=data["is_primary_key"],
-            is_not_null=data["is_not_null"],
-            is_unique=data["is_unique"],
+            name=data.get("name", ""),
+            data_type=DataType(data.get("data_type", DataType.TEXT.value)),
+            is_primary_key=data.get("is_primary_key", False),
+            is_not_null=data.get("is_not_null", False),
+            is_unique=data.get("is_unique", False),
         )
 
 

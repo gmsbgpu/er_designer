@@ -50,7 +50,7 @@ class SqlGenerator:
 
         lines = [f"CREATE TABLE {table_name} ("]
 
-        for attr in entity.attributes:
+        for index, attr in enumerate(entity.attributes):
             type_sql = SqlGenerator._map_data_type_to_sql(attr.data_type)
             constraints = []
 
@@ -64,6 +64,8 @@ class SqlGenerator:
             constraints_str = " " + " ".join(constraints) if constraints else ""
             attr_name = SqlGenerator._quote_identifier(attr.name)
             line = f"    {attr_name} {type_sql}{constraints_str}"
+            if index < len(entity.attributes) - 1:
+                line += ","
             lines.append(line)
 
         lines.append(");")
