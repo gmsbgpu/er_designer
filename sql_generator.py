@@ -31,6 +31,12 @@ class SqlGenerator:
         """
         if data_type == DataType.VARCHAR:
             return f"VARCHAR({length})"
+        if data_type == DataType.CHAR:
+            return "CHAR(1)"
+        if data_type == DataType.FLOAT:
+            return "DOUBLE PRECISION"
+        if data_type == DataType.DECIMAL:
+            return "NUMERIC"
         return data_type.value
 
     @staticmethod

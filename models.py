@@ -20,7 +20,7 @@ class DataType(Enum):
     DECIMAL = "DECIMAL"
     FLOAT = "FLOAT"
     CHAR = "CHAR"
-    BLOB = "BLOB"
+    BYTEA = "BYTEA"
 
     def __str__(self):
         return self.value
@@ -62,11 +62,11 @@ class Attribute:
         """Десериализация из словаря."""
         return cls(
             id=uuid.UUID(data["id"]),
-            name=data.get("name", ""),
-            data_type=DataType(data.get("data_type", DataType.TEXT.value)),
-            is_primary_key=data.get("is_primary_key", False),
-            is_not_null=data.get("is_not_null", False),
-            is_unique=data.get("is_unique", False),
+            name=data["name"],
+            data_type=DataType(data["data_type"]),
+            is_primary_key=data["is_primary_key"],
+            is_not_null=data["is_not_null"],
+            is_unique=data["is_unique"],
         )
 
 
@@ -145,8 +145,8 @@ class Relationship:
             id=uuid.UUID(data["id"]),
             source_entity_id=uuid.UUID(data["source_entity_id"]),
             target_entity_id=uuid.UUID(data["target_entity_id"]),
-            source_field=data.get("source_field", ""),
-            target_field=data.get("target_field", ""),
+            source_field=data["source_field"],
+            target_field=data["target_field"],
             type=RelationType(data["type"]),
         )
 
