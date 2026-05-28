@@ -259,13 +259,16 @@ class PropertyPanelWidget(QWidget):
             )
             return
 
-        reply = QMessageBox.question(
-            self, "Подтверждение удаления",
-            f"Удалить атрибут '{attr.name}'?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-        )
+        message = QMessageBox(self)
+        message.setIcon(QMessageBox.Icon.Question)
+        message.setWindowTitle("Подтверждение удаления")
+        message.setText(f"Удалить атрибут '{attr.name}'?")
+        delete_button = message.addButton("Удалить", QMessageBox.ButtonRole.AcceptRole)
+        message.addButton("Отмена", QMessageBox.ButtonRole.RejectRole)
+        message.setDefaultButton(delete_button)
+        message.exec()
 
-        if reply == QMessageBox.StandardButton.Yes:
+        if message.clickedButton() == delete_button:
             self.current_entity.remove_attribute(attr.id)
             self._update_attributes_table()
             self.entity_updated.emit(self.current_entity.id)

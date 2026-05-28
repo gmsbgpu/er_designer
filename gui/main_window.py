@@ -508,7 +508,7 @@ class MainWindow(QMainWindow):
 
         file_path, _ = QFileDialog.getOpenFileName(
             self, "Открыть проект", "",
-            "ER-Designer Project (*.erd);;JSON Files (*.json);;All Files (*)"
+            "Проект ER-Designer (*.erd);;Файлы JSON (*.json);;Все файлы (*)"
         )
         if file_path:
             try:
@@ -530,7 +530,7 @@ class MainWindow(QMainWindow):
         """Сохранить проект как..."""
         file_path, _ = QFileDialog.getSaveFileName(
             self, "Сохранить проект", self.project.name,
-            "ER-Designer Project (*.erd);;JSON Files (*.json);;All Files (*)"
+            "Проект ER-Designer (*.erd);;Файлы JSON (*.json);;Все файлы (*)"
         )
         if file_path:
             self._save_to_file(file_path)
@@ -554,7 +554,7 @@ class MainWindow(QMainWindow):
 
         file_path, _ = QFileDialog.getSaveFileName(
             self, "Экспорт SQL (PostgreSQL)", self.project.name,
-            "SQL Files (*.sql);;All Files (*)"
+            "SQL-файлы (*.sql);;Все файлы (*)"
         )
         if file_path:
             try:
@@ -566,20 +566,25 @@ class MainWindow(QMainWindow):
 
     def _confirm_save(self):
         """Спросить пользователя о сохранении изменений."""
-        reply = QMessageBox.question(
-            self, "Сохранение изменений",
-            "Сохранить изменения перед закрытием?",
-            QMessageBox.StandardButton.Yes |
-            QMessageBox.StandardButton.No |
-            QMessageBox.StandardButton.Cancel
-        )
-        if reply == QMessageBox.StandardButton.Yes:
+        message = QMessageBox(self)
+        message.setIcon(QMessageBox.Icon.Question)
+        message.setWindowTitle("Сохранение изменений")
+        message.setText("Сохранить изменения перед закрытием?")
+
+        save_button = message.addButton("Сохранить", QMessageBox.ButtonRole.AcceptRole)
+        dont_save_button = message.addButton("Не сохранять", QMessageBox.ButtonRole.DestructiveRole)
+        message.addButton("Отмена", QMessageBox.ButtonRole.RejectRole)
+        message.setDefaultButton(save_button)
+
+        message.exec()
+        clicked_button = message.clickedButton()
+
+        if clicked_button == save_button:
             self.on_save_project()
             return True
-        elif reply == QMessageBox.StandardButton.No:
+        elif clicked_button == dont_save_button:
             return True
-        else:
-            return False
+        return False
 
     def on_about(self):
         """Показать диалог 'О программе'."""

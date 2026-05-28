@@ -42,10 +42,12 @@ class AttributeDialog(QDialog):
 
         layout.addLayout(form_layout)
 
-        # Кнопки OK/Cancel
+        # Кнопки подтверждения и отмены.
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
+        buttons.button(QDialogButtonBox.StandardButton.Ok).setText("Применить")
+        buttons.button(QDialogButtonBox.StandardButton.Cancel).setText("Отмена")
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
@@ -107,5 +109,6 @@ class AboutDialog(QDialog):
         layout.addSpacing(10)
 
         button = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok)
+        button.button(QDialogButtonBox.StandardButton.Ok).setText("Закрыть")
         button.accepted.connect(self.accept)
         layout.addWidget(button)

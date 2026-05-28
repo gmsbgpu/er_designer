@@ -10,7 +10,8 @@ from PyQt6.QtWidgets import (
     QGraphicsView, QGraphicsScene, QGraphicsRectItem,
     QGraphicsTextItem, QGraphicsLineItem, QGraphicsPolygonItem,
     QGraphicsPathItem,
-    QMenu, QMessageBox
+    QMenu, QMessageBox, QDialog, QVBoxLayout, QLabel, QLineEdit,
+    QDialogButtonBox
 )
 from PyQt6.QtCore import pyqtSignal, Qt, QRectF, QPointF, QLineF
 from PyQt6.QtGui import QPen, QBrush, QColor, QFont, QPolygonF, QPainterPath
@@ -818,16 +819,27 @@ class CanvasWidget(QGraphicsView):
 
     def _rename_entity(self, entity_item: EntityItem):
         """Переименовать сущность через диалог."""
-        from PyQt6.QtWidgets import QInputDialog
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Переименование")
 
-        new_name, ok = QInputDialog.getText(
-            self, "Переименование",
-            "Новое имя сущности:",
-            text=entity_item.entity.name
+        layout = QVBoxLayout(dialog)
+        layout.addWidget(QLabel("Новое имя сущности:"))
+
+        name_edit = QLineEdit(entity_item.entity.name)
+        name_edit.selectAll()
+        layout.addWidget(name_edit)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
+        buttons.button(QDialogButtonBox.StandardButton.Ok).setText("Переименовать")
+        buttons.button(QDialogButtonBox.StandardButton.Cancel).setText("Отмена")
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
 
-        if ok:
-            new_name = new_name.strip()
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            new_name = name_edit.text().strip()
             if not new_name:
                 QMessageBox.warning(self, "Переименование", "Имя сущности не может быть пустым.")
                 return
