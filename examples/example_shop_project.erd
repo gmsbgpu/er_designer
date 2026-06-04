@@ -1,0 +1,439 @@
+{
+    "name": "ShopDemo",
+    "entities": [
+        {
+            "id": "11111111-1111-4111-8111-111111111111",
+            "name": "Users",
+            "position": {
+                "x": 75.0,
+                "y": 193.0
+            },
+            "attributes": [
+                {
+                    "id": "11111111-1111-4111-8111-000000000001",
+                    "name": "id",
+                    "data_type": "INTEGER",
+                    "is_primary_key": true,
+                    "is_not_null": false,
+                    "is_unique": false
+                },
+                {
+                    "id": "11111111-1111-4111-8111-000000000002",
+                    "name": "login",
+                    "data_type": "VARCHAR",
+                    "is_primary_key": false,
+                    "is_not_null": true,
+                    "is_unique": true
+                },
+                {
+                    "id": "11111111-1111-4111-8111-000000000003",
+                    "name": "email",
+                    "data_type": "VARCHAR",
+                    "is_primary_key": false,
+                    "is_not_null": true,
+                    "is_unique": true
+                },
+                {
+                    "id": "11111111-1111-4111-8111-000000000004",
+                    "name": "password_hash",
+                    "data_type": "VARCHAR",
+                    "is_primary_key": false,
+                    "is_not_null": true,
+                    "is_unique": false
+                },
+                {
+                    "id": "11111111-1111-4111-8111-000000000005",
+                    "name": "created_at",
+                    "data_type": "DATE",
+                    "is_primary_key": false,
+                    "is_not_null": true,
+                    "is_unique": false
+                },
+                {
+                    "id": "11111111-1111-4111-8111-000000000006",
+                    "name": "is_active",
+                    "data_type": "BOOLEAN",
+                    "is_primary_key": false,
+                    "is_not_null": true,
+                    "is_unique": false
+                }
+            ]
+        },
+        {
+            "id": "22222222-2222-4222-8222-222222222222",
+            "name": "Roles",
+            "position": {
+                "x": 57.0,
+                "y": 569.0
+            },
+            "attributes": [
+                {
+                    "id": "22222222-2222-4222-8222-000000000001",
+                    "name": "id",
+                    "data_type": "INTEGER",
+                    "is_primary_key": true,
+                    "is_not_null": false,
+                    "is_unique": false
+                },
+                {
+                    "id": "22222222-2222-4222-8222-000000000002",
+                    "name": "name",
+                    "data_type": "VARCHAR",
+                    "is_primary_key": false,
+                    "is_not_null": true,
+                    "is_unique": true
+                }
+            ]
+        },
+        {
+            "id": "33333333-3333-4333-8333-333333333333",
+            "name": "UserRoles",
+            "position": {
+                "x": 67.0,
+                "y": 407.0
+            },
+            "attributes": [
+                {
+                    "id": "33333333-3333-4333-8333-000000000001",
+                    "name": "id",
+                    "data_type": "INTEGER",
+                    "is_primary_key": true,
+                    "is_not_null": false,
+                    "is_unique": false
+                },
+                {
+                    "id": "33333333-3333-4333-8333-000000000002",
+                    "name": "user_id",
+                    "data_type": "INTEGER",
+                    "is_primary_key": false,
+                    "is_not_null": true,
+                    "is_unique": false
+                },
+                {
+                    "id": "33333333-3333-4333-8333-000000000003",
+                    "name": "role_id",
+                    "data_type": "INTEGER",
+                    "is_primary_key": false,
+                    "is_not_null": true,
+                    "is_unique": false
+                },
+                {
+                    "id": "33333333-3333-4333-8333-000000000004",
+                    "name": "assigned_at",
+                    "data_type": "DATE",
+                    "is_primary_key": false,
+                    "is_not_null": true,
+                    "is_unique": false
+                }
+            ]
+        },
+        {
+            "id": "44444444-4444-4444-8444-444444444444",
+            "name": "Categories",
+            "position": {
+                "x": 749.0,
+                "y": 33.0
+            },
+            "attributes": [
+                {
+                    "id": "44444444-4444-4444-8444-000000000001",
+                    "name": "id",
+                    "data_type": "INTEGER",
+                    "is_primary_key": true,
+                    "is_not_null": false,
+                    "is_unique": false
+                },
+                {
+                    "id": "44444444-4444-4444-8444-000000000002",
+                    "name": "name",
+                    "data_type": "VARCHAR",
+                    "is_primary_key": false,
+                    "is_not_null": true,
+                    "is_unique": true
+                },
+                {
+                    "id": "44444444-4444-4444-8444-000000000003",
+                    "name": "description",
+                    "data_type": "TEXT",
+                    "is_primary_key": false,
+                    "is_not_null": false,
+                    "is_unique": false
+                }
+            ]
+        },
+        {
+            "id": "55555555-5555-4555-8555-555555555555",
+            "name": "Products",
+            "position": {
+                "x": 733.0,
+                "y": 174.0
+            },
+            "attributes": [
+                {
+                    "id": "55555555-5555-4555-8555-000000000001",
+                    "name": "id",
+                    "data_type": "INTEGER",
+                    "is_primary_key": true,
+                    "is_not_null": false,
+                    "is_unique": false
+                },
+                {
+                    "id": "55555555-5555-4555-8555-000000000002",
+                    "name": "category_id",
+                    "data_type": "INTEGER",
+                    "is_primary_key": false,
+                    "is_not_null": true,
+                    "is_unique": false
+                },
+                {
+                    "id": "55555555-5555-4555-8555-000000000003",
+                    "name": "name",
+                    "data_type": "VARCHAR",
+                    "is_primary_key": false,
+                    "is_not_null": true,
+                    "is_unique": false
+                },
+                {
+                    "id": "55555555-5555-4555-8555-000000000004",
+                    "name": "sku",
+                    "data_type": "VARCHAR",
+                    "is_primary_key": false,
+                    "is_not_null": true,
+                    "is_unique": true
+                },
+                {
+                    "id": "55555555-5555-4555-8555-000000000005",
+                    "name": "price",
+                    "data_type": "DECIMAL",
+                    "is_primary_key": false,
+                    "is_not_null": true,
+                    "is_unique": false
+                },
+                {
+                    "id": "55555555-5555-4555-8555-000000000006",
+                    "name": "in_stock",
+                    "data_type": "BOOLEAN",
+                    "is_primary_key": false,
+                    "is_not_null": true,
+                    "is_unique": false
+                }
+            ]
+        },
+        {
+            "id": "66666666-6666-4666-8666-666666666666",
+            "name": "Orders",
+            "position": {
+                "x": 413.0,
+                "y": 435.0
+            },
+            "attributes": [
+                {
+                    "id": "66666666-6666-4666-8666-000000000001",
+                    "name": "id",
+                    "data_type": "INTEGER",
+                    "is_primary_key": true,
+                    "is_not_null": false,
+                    "is_unique": false
+                },
+                {
+                    "id": "66666666-6666-4666-8666-000000000002",
+                    "name": "user_id",
+                    "data_type": "INTEGER",
+                    "is_primary_key": false,
+                    "is_not_null": true,
+                    "is_unique": false
+                },
+                {
+                    "id": "66666666-6666-4666-8666-000000000003",
+                    "name": "order_date",
+                    "data_type": "DATE",
+                    "is_primary_key": false,
+                    "is_not_null": true,
+                    "is_unique": false
+                },
+                {
+                    "id": "66666666-6666-4666-8666-000000000004",
+                    "name": "status",
+                    "data_type": "VARCHAR",
+                    "is_primary_key": false,
+                    "is_not_null": true,
+                    "is_unique": false
+                },
+                {
+                    "id": "66666666-6666-4666-8666-000000000005",
+                    "name": "total",
+                    "data_type": "DECIMAL",
+                    "is_primary_key": false,
+                    "is_not_null": true,
+                    "is_unique": false
+                }
+            ]
+        },
+        {
+            "id": "77777777-7777-4777-8777-777777777777",
+            "name": "OrderItems",
+            "position": {
+                "x": 735.0,
+                "y": 412.0
+            },
+            "attributes": [
+                {
+                    "id": "77777777-7777-4777-8777-000000000001",
+                    "name": "id",
+                    "data_type": "INTEGER",
+                    "is_primary_key": true,
+                    "is_not_null": false,
+                    "is_unique": false
+                },
+                {
+                    "id": "77777777-7777-4777-8777-000000000002",
+                    "name": "order_id",
+                    "data_type": "INTEGER",
+                    "is_primary_key": false,
+                    "is_not_null": true,
+                    "is_unique": false
+                },
+                {
+                    "id": "77777777-7777-4777-8777-000000000003",
+                    "name": "product_id",
+                    "data_type": "INTEGER",
+                    "is_primary_key": false,
+                    "is_not_null": true,
+                    "is_unique": false
+                },
+                {
+                    "id": "77777777-7777-4777-8777-000000000004",
+                    "name": "quantity",
+                    "data_type": "INTEGER",
+                    "is_primary_key": false,
+                    "is_not_null": true,
+                    "is_unique": false
+                },
+                {
+                    "id": "77777777-7777-4777-8777-000000000005",
+                    "name": "price",
+                    "data_type": "DECIMAL",
+                    "is_primary_key": false,
+                    "is_not_null": true,
+                    "is_unique": false
+                }
+            ]
+        },
+        {
+            "id": "88888888-8888-4888-8888-888888888888",
+            "name": "Payments",
+            "position": {
+                "x": 411.0,
+                "y": 177.0
+            },
+            "attributes": [
+                {
+                    "id": "88888888-8888-4888-8888-000000000001",
+                    "name": "id",
+                    "data_type": "INTEGER",
+                    "is_primary_key": true,
+                    "is_not_null": false,
+                    "is_unique": false
+                },
+                {
+                    "id": "88888888-8888-4888-8888-000000000002",
+                    "name": "order_id",
+                    "data_type": "INTEGER",
+                    "is_primary_key": false,
+                    "is_not_null": true,
+                    "is_unique": false
+                },
+                {
+                    "id": "88888888-8888-4888-8888-000000000003",
+                    "name": "amount",
+                    "data_type": "DECIMAL",
+                    "is_primary_key": false,
+                    "is_not_null": true,
+                    "is_unique": false
+                },
+                {
+                    "id": "88888888-8888-4888-8888-000000000004",
+                    "name": "paid_at",
+                    "data_type": "DATE",
+                    "is_primary_key": false,
+                    "is_not_null": true,
+                    "is_unique": false
+                },
+                {
+                    "id": "88888888-8888-4888-8888-000000000005",
+                    "name": "method",
+                    "data_type": "VARCHAR",
+                    "is_primary_key": false,
+                    "is_not_null": true,
+                    "is_unique": false
+                },
+                {
+                    "id": "88888888-8888-4888-8888-000000000006",
+                    "name": "status",
+                    "data_type": "VARCHAR",
+                    "is_primary_key": false,
+                    "is_not_null": true,
+                    "is_unique": false
+                }
+            ]
+        }
+    ],
+    "relationships": [
+        {
+            "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1",
+            "source_entity_id": "11111111-1111-4111-8111-111111111111",
+            "target_entity_id": "33333333-3333-4333-8333-333333333333",
+            "source_field": "id",
+            "target_field": "user_id",
+            "type": "1:N"
+        },
+        {
+            "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2",
+            "source_entity_id": "22222222-2222-4222-8222-222222222222",
+            "target_entity_id": "33333333-3333-4333-8333-333333333333",
+            "source_field": "id",
+            "target_field": "role_id",
+            "type": "1:N"
+        },
+        {
+            "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa3",
+            "source_entity_id": "44444444-4444-4444-8444-444444444444",
+            "target_entity_id": "55555555-5555-4555-8555-555555555555",
+            "source_field": "id",
+            "target_field": "category_id",
+            "type": "1:N"
+        },
+        {
+            "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa4",
+            "source_entity_id": "11111111-1111-4111-8111-111111111111",
+            "target_entity_id": "66666666-6666-4666-8666-666666666666",
+            "source_field": "id",
+            "target_field": "user_id",
+            "type": "1:N"
+        },
+        {
+            "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa5",
+            "source_entity_id": "66666666-6666-4666-8666-666666666666",
+            "target_entity_id": "77777777-7777-4777-8777-777777777777",
+            "source_field": "id",
+            "target_field": "order_id",
+            "type": "1:N"
+        },
+        {
+            "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa6",
+            "source_entity_id": "55555555-5555-4555-8555-555555555555",
+            "target_entity_id": "77777777-7777-4777-8777-777777777777",
+            "source_field": "id",
+            "target_field": "product_id",
+            "type": "1:N"
+        },
+        {
+            "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa7",
+            "source_entity_id": "66666666-6666-4666-8666-666666666666",
+            "target_entity_id": "88888888-8888-4888-8888-888888888888",
+            "source_field": "id",
+            "target_field": "order_id",
+            "type": "1:N"
+        }
+    ]
+}
